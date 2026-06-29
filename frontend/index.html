@@ -25,27 +25,24 @@
     <!-- 登入表單 -->
     <div class="login-form">
 
-      <!-- 姓名搜尋（可輸入過濾） -->
-      <div class="form-group" style="position:relative;">
-        <label class="form-label" for="nameInput">
+      <!-- 選擇分隊 -->
+      <div class="form-group">
+        <label class="form-label" for="branchSelect">
+          🏢 選擇您的分隊 <span class="req">*</span>
+        </label>
+        <select class="form-select" id="branchSelect" onchange="handleBranchChange()" aria-required="true">
+          <option value="">— 載入中... —</option>
+        </select>
+      </div>
+
+      <!-- 選擇姓名 -->
+      <div class="form-group">
+        <label class="form-label" for="nameSelect">
           👤 選擇您的姓名 <span class="req">*</span>
         </label>
-        <input
-          type="text"
-          class="form-input"
-          id="nameInput"
-          placeholder="請輸入或搜尋姓名..."
-          autocomplete="off"
-          aria-required="true"
-          aria-autocomplete="list"
-          aria-controls="nameDropdown"
-          aria-expanded="false"
-          readonly
-        >
-        <!-- 隱藏欄位存真正選取的值 -->
-        <input type="hidden" id="nameSelect">
-        <!-- 下拉候選清單 -->
-        <div id="nameDropdown" class="name-dropdown hidden" role="listbox" aria-label="人員名單"></div>
+        <select class="form-select" id="nameSelect" aria-required="true" disabled>
+          <option value="">— 請先選擇分隊 —</option>
+        </select>
       </div>
 
       <!-- 手機末三碼 -->
@@ -114,110 +111,89 @@
 
   // ─── 載入人員名單 ─────────────────────────────────────────
   async function loadMembers() {
-    const input    = document.getElementById('nameInput');
-    const dropdown = document.getElementById('nameDropdown');
-    input.placeholder = '載入中...';
-    input.disabled = true;
+    const branchSelect = document.getElementById('branchSelect');
+    branchSelect.innerHTML = '<option value="">— 載入中... —</option>';
+    branchSelect.disabled = true;
 
     try {
       const res = await API.getAllMembers();
       if (!res.success) throw new Error(res.error);
 
       _allMembers = res.data || [];
-      input.placeholder = '請輸入姓名搜尋...';
-      input.disabled = false;
-      input.readOnly = false;
+
+      // 取得所有不重複的分隊名稱
+      const branches = [...new Set(_allMembers.map(m => m.branch))].filter(Boolean);
+      
+      branchSelect.innerHTML = '<option value="">— 請選擇您的分隊 —</option>';
+      branches.sort((a, b) => a.localeCompare(b, 'zh-TW')).forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = b;
+        branchSelect.appendChild(opt);
+      });
+      branchSelect.disabled = false;
 
     } catch (err) {
-      input.placeholder = '⚠️ 載入失敗，請重新整理';
+      branchSelect.innerHTML = `<option value="">⚠️ 載入失敗，請重新整理</option>`;
       Toast.error('無法載入人員名單：' + err.message);
     }
   }
 
-  // ─── 渲染下拉候選清單 ─────────────────────────────────────
-  function renderDropdown(query) {
-    const dropdown = document.getElementById('nameDropdown');
-    const input    = document.getElementById('nameInput');
+  // ─── 當選擇分隊改變時，動態更新人員名單 ─────────────────────
+  function handleBranchChange() {
+    const branchSelect = document.getElementById('branchSelect');
+    const nameSelect   = document.getElementById('nameSelect');
+    const selectedBranch = branchSelect.value;
 
-    const q = query.trim().toLowerCase();
-    const filtered = q
-      ? _allMembers.filter(m => m.name.toLowerCase().includes(q) || m.branch.includes(q))
-      : _allMembers;
-
-    if (filtered.length === 0) {
-      dropdown.innerHTML = `<div class="name-dropdown-empty">找不到符合的人員</div>`;
-      dropdown.classList.remove('hidden');
-      input.setAttribute('aria-expanded', 'true');
+    nameSelect.innerHTML = '';
+    
+    if (!selectedBranch) {
+      nameSelect.innerHTML = '<option value="">— 請先選擇分隊 —</option>';
+      nameSelect.disabled = true;
       return;
     }
 
-    // 依分隊分組
-    const groups = {};
-    filtered.forEach(m => {
-      if (!groups[m.branch]) groups[m.branch] = [];
-      groups[m.branch].push(m);
+    const filteredMembers = _allMembers.filter(m => m.branch === selectedBranch);
+    
+    nameSelect.innerHTML = '<option value="">— 請選擇您的姓名 —</option>';
+    filteredMembers.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW')).forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.role !== '志工' ? `${m.name}（${m.role}）` : m.name;
+      nameSelect.appendChild(opt);
     });
-
-    dropdown.innerHTML = '';
-    Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'zh-TW')).forEach(([branch, list]) => {
-      const groupLabel = document.createElement('div');
-      groupLabel.className = 'name-dropdown-group';
-      groupLabel.textContent = branch;
-      dropdown.appendChild(groupLabel);
-
-      list.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW')).forEach(m => {
-        const item = document.createElement('div');
-        item.className = 'name-dropdown-item';
-        item.dataset.name = m.name;
-        item.dataset.branch = m.branch;
-        item.dataset.role = m.role;
-        item.textContent = m.role !== '志工' ? `${m.name}（${m.role}）` : m.name;
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // 避免 input blur 先於 click
-          selectMember(m);
-        });
-        dropdown.appendChild(item);
-      });
-    });
-
-    dropdown.classList.remove('hidden');
-    input.setAttribute('aria-expanded', 'true');
-  }
-
-  function selectMember(m) {
-    document.getElementById('nameInput').value = m.role !== '志工' ? `${m.name}（${m.role}）` : m.name;
-    document.getElementById('nameSelect').value = m.name;
-    document.getElementById('nameDropdown').classList.add('hidden');
-    document.getElementById('nameInput').setAttribute('aria-expanded', 'false');
-    document.getElementById('phoneInput').focus();
-  }
-
-  function hideDropdown() {
-    document.getElementById('nameDropdown').classList.add('hidden');
-    document.getElementById('nameInput').setAttribute('aria-expanded', 'false');
+    nameSelect.disabled = false;
   }
 
   // ─── 登入處理 ─────────────────────────────────────────────
   async function handleLogin() {
+    const branchSelect   = document.getElementById('branchSelect');
     const nameSelect     = document.getElementById('nameSelect');
     const phoneInput     = document.getElementById('phoneInput');
     const loginBtn       = document.getElementById('loginBtn');
     const loginError     = document.getElementById('loginError');
     const loginErrorText = document.getElementById('loginErrorText');
 
-    const name  = document.getElementById('nameSelect').value.trim();
+    const name  = nameSelect.value.trim();
     const phone = phoneInput.value.trim();
 
     // 隱藏舊錯誤
     loginError.classList.add('hidden');
     phoneInput.style.borderColor = '';
     nameSelect.style.borderColor = '';
+    branchSelect.style.borderColor = '';
 
     // 驗證
+    if (!branchSelect.value) {
+      _showError('請選擇您的分隊');
+      branchSelect.style.borderColor = 'var(--c-danger)';
+      branchSelect.focus();
+      return;
+    }
     if (!name) {
       _showError('請選擇您的姓名');
-      document.getElementById('nameInput').style.borderColor = 'var(--c-danger)';
-      document.getElementById('nameInput').focus();
+      nameSelect.style.borderColor = 'var(--c-danger)';
+      nameSelect.focus();
       return;
     }
     if (!/^\d{3}$/.test(phone)) {
@@ -271,24 +247,6 @@
 
   // ─── 初始掛載 ─────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
-    const nameInput = document.getElementById('nameInput');
-
-    // 輸入時過濾
-    nameInput.addEventListener('input', () => {
-      document.getElementById('nameSelect').value = '';
-      renderDropdown(nameInput.value);
-    });
-
-    // 點擊開啟下拉
-    nameInput.addEventListener('focus', () => {
-      renderDropdown(nameInput.value);
-    });
-
-    // 失去焦點時關閉（稍延遲讓 mousedown 先執行）
-    nameInput.addEventListener('blur', () => {
-      setTimeout(hideDropdown, 150);
-    });
-
     // Enter 鍵觸發登入
     document.getElementById('phoneInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleLogin();

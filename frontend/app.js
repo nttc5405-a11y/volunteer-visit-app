@@ -231,23 +231,42 @@ const GPS = {
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-        { headers: { 'Accept-Language': 'zh-TW,zh;q=0.9' } }
+        { headers: { 'Accept-Language': 'zh-TW,zh;q=0.9', 'User-Agent': 'VolunteerVisitApp/1.0' } }
       );
       const data = await res.json();
-      if (!data.address) return '';
+      if (!data || !data.address) return '';
 
       const a = data.address;
-      // 縣市
-      const county = a.county || a.city || a.state || '';
-      // 鄉鎮區
-      const district = a.town || a.township || a.suburb || a.village || '';
-      // 路段（road 或 neighbourhood）
-      const road = a.road || a.neighbourhood || '';
-      // 門牌（house_number）
-      const num = a.house_number ? `${a.house_number}號` : '';
+      
+      // 1. 縣市 (County / City / State)
+      let county = a.county || a.city || a.state || '';
+      if (county.includes('臺灣') || county.includes('Taiwan')) county = '';
 
-      const parts = [county, district, road, num].filter(Boolean);
-      return parts.join('');
+      // 2. 鄉鎮市區 (Town / Township / District / Suburb)
+      let district = a.town || a.township || a.district || a.suburb || a.city_district || '';
+
+      // 3. 村里 (Village / Neighbourhood)
+      let village = a.village || a.neighbourhood || '';
+      if (village === district) village = '';
+
+      // 4. 路街巷弄 (Road)
+      let road = a.road || '';
+
+      // 5. 門牌 (House number)
+      let num = a.house_number || '';
+      if (num && !num.endsWith('號')) {
+        num = num + '號';
+      }
+
+      // 重組地址，避免重複與遺漏
+      let addressParts = [];
+      if (county && !addressParts.includes(county)) addressParts.push(county);
+      if (district && !addressParts.includes(district)) addressParts.push(district);
+      if (village && !addressParts.includes(village) && !district.includes(village)) addressParts.push(village);
+      if (road && !addressParts.includes(road)) addressParts.push(road);
+      if (num && !addressParts.includes(num)) addressParts.push(num);
+
+      return addressParts.join('');
     } catch (_) { return ''; }
   },
 };

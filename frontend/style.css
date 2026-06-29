@@ -812,6 +812,45 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 
 /* ============================================================
+   協同志工 標籤選取器
+   ============================================================ */
+.teammate-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.teammate-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--bg-input);
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.teammate-chip:hover {
+  border-color: var(--c-primary-light);
+  background: #EEF2FF;
+}
+
+.teammate-chip.selected {
+  background: var(--c-primary);
+  color: #fff;
+  border-color: var(--c-primary);
+  box-shadow: 0 2px 6px rgba(30, 58, 138, 0.2);
+}
+
+/* ============================================================
    桌面端（540px 以上）fallback
    ============================================================ */
 @media (min-width: 540px) {

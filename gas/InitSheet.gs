@@ -63,7 +63,7 @@ function _createVisitRecordSheet(ss) {
   }
 
   var headers = [
-    '流水號', '訪視日期時間', '主填寫人姓名', '協同志工',
+    '流水號', '填報時間', '訪視日期', '主填寫人姓名', '協同志工',
     '所屬分隊', '案家姓名', '案家電話', '案家地址', 'GPS定位座標',
     'Q01', 'Q02', 'Q03', 'Q04', 'Q05'
   ];
@@ -75,15 +75,16 @@ function _createVisitRecordSheet(ss) {
   sheet.setFrozenRows(1);
 
   // 設定欄寬
-  sheet.setColumnWidth(1, 70);  // 流水號
-  sheet.setColumnWidth(2, 160); // 日期時間
-  sheet.setColumnWidth(3, 100); // 主填寫人
-  sheet.setColumnWidth(4, 120); // 協同志工
-  sheet.setColumnWidth(5, 90);  // 分隊
-  sheet.setColumnWidth(6, 100); // 案家姓名
-  sheet.setColumnWidth(7, 120); // 電話
-  sheet.setColumnWidth(8, 200); // 地址
-  sheet.setColumnWidth(9, 180); // GPS
+  sheet.setColumnWidth(1, 70);   // 流水號
+  sheet.setColumnWidth(2, 160);  // 填報時間
+  sheet.setColumnWidth(3, 110);  // 訪視日期
+  sheet.setColumnWidth(4, 100);  // 主填寫人
+  sheet.setColumnWidth(5, 120);  // 協同志工
+  sheet.setColumnWidth(6, 90);   // 分隊
+  sheet.setColumnWidth(7, 100);  // 案家姓名
+  sheet.setColumnWidth(8, 120);  // 電話
+  sheet.setColumnWidth(9, 200);  // 地址
+  sheet.setColumnWidth(10, 180); // GPS
 
   Logger.log('✓ 訪視紀錄表 建立完成');
 }
@@ -277,7 +278,7 @@ function createBranchSheets() {
   var mainRecordSheet = mainSS.getSheetByName('訪視紀錄表');
   var mainHeaders = mainRecordSheet
     ? mainRecordSheet.getRange(1, 1, 1, mainRecordSheet.getLastColumn()).getValues()[0]
-    : ['流水號','訪視日期時間','主填寫人姓名','協同志工','所屬分隊',
+    : ['流水號','填報時間','訪視日期','主填寫人姓名','協同志工','所屬分隊',
        '案家姓名','案家電話','案家地址','GPS定位座標','Q01','Q02','Q03','Q04','Q05'];
 
   // 逐列處理分隊
@@ -310,15 +311,16 @@ function createBranchSheets() {
       recordSheet.setFrozenRows(1);
 
       // 調整欄寬（與主表相同）
-      recordSheet.setColumnWidth(1, 70);
-      recordSheet.setColumnWidth(2, 160);
-      recordSheet.setColumnWidth(3, 100);
-      recordSheet.setColumnWidth(4, 120);
-      recordSheet.setColumnWidth(5, 90);
-      recordSheet.setColumnWidth(6, 100);
-      recordSheet.setColumnWidth(7, 120);
-      recordSheet.setColumnWidth(8, 200);
-      recordSheet.setColumnWidth(9, 180);
+      recordSheet.setColumnWidth(1, 70);   // 流水號
+      recordSheet.setColumnWidth(2, 160);  // 填報時間
+      recordSheet.setColumnWidth(3, 110);  // 訪視日期
+      recordSheet.setColumnWidth(4, 100);  // 主填寫人
+      recordSheet.setColumnWidth(5, 120);  // 協同志工
+      recordSheet.setColumnWidth(6, 90);   // 分隊
+      recordSheet.setColumnWidth(7, 100);  // 案家姓名
+      recordSheet.setColumnWidth(8, 120);  // 電話
+      recordSheet.setColumnWidth(9, 200);  // 地址
+      recordSheet.setColumnWidth(10, 180); // GPS
 
       // 建立「分隊資訊」說明工作表
       var infoSheet = newSS.insertSheet('分隊資訊');

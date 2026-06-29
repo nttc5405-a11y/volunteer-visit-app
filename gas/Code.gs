@@ -227,23 +227,20 @@ function submitForm(record) {
     }
   }
 
-  // 組合列資料（訪視日期優先用前端填寫的日期，fallback 為當下時間）
-  var visitDate = record.visitDate
-    ? new Date(record.visitDate)
-    : new Date();
-
+  // 組合列資料
   var rowData = [
     id,
-    visitDate,
-    record.submitter   || '',
+    new Date(),               // 填報時間
+    record.visitDate || '',   // 訪視日期
+    record.submitter || '',
     Array.isArray(record.teamMembers)
       ? record.teamMembers.join(',')
       : (record.teamMembers || ''),
-    record.branch      || '',
-    record.clientName  || '',
+    record.branch    || '',
+    record.clientName || '',
     record.clientPhone || '',
     record.clientAddress || '',
-    record.gps         || ''
+    record.gps       || ''
   ];
 
   // 依題目順序附加答案
