@@ -97,14 +97,16 @@ function getQuestions() {
     if (!row[0]) continue;
 
     questions.push({
-      id:       String(row[0]).trim(),
-      category: String(row[1]).trim(),
-      content:  String(row[2]).trim(),
-      type:     String(row[3]).trim(),
-      options:  row[4]
-        ? String(row[4]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
+      id:         String(row[0]).trim(),
+      visitType:  String(row[1]).trim(),
+      dependency: String(row[2]).trim(),
+      category:   String(row[3]).trim(),
+      content:    String(row[4]).trim(),
+      type:       String(row[5]).trim(),
+      options:    row[6]
+        ? String(row[6]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
         : [],
-      required: row[5] === true || String(row[5]).toUpperCase() === 'TRUE'
+      required:   row[7] === true || String(row[7]).toUpperCase() === 'TRUE'
     });
   }
 
@@ -313,6 +315,7 @@ function submitForm(record) {
     id,
     new Date(),               // 填報時間
     record.visitDate || '',   // 訪視日期
+    record.visitType || '',   // 訪視類型
     record.submitter || '',
     Array.isArray(record.teamMembers)
       ? record.teamMembers.join(',')

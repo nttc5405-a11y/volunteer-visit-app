@@ -141,6 +141,7 @@
     const items = [
       { label: '主填寫人', value: session.name },
       { label: '所屬分隊', value: session.branch },
+      { label: '訪視類型', value: `<span class="preview-tag" style="background:var(--c-primary);color:#fff;border:none;">${data.visitType || '防火宣導'}</span>` },
       {
         label: '協同志工',
         value: (data.teamMembers && data.teamMembers.length > 0)
@@ -229,6 +230,7 @@
         submitter:     data.submitter,
         branch:        data.branch,
         visitDate:     data.visitDate     || '',
+        visitType:     data.visitType     || '防火宣導',
         clientName:    data.clientName,
         clientPhone:   data.clientPhone   || '',
         clientAddress: data.clientAddress || '',

@@ -51,6 +51,17 @@
                oninput="updateProgress()">
       </div>
 
+      <!-- 訪視宣導類型 -->
+      <div class="form-group">
+        <label class="form-label" for="visitType">
+          📋 訪視宣導類型 <span class="req">*</span>
+        </label>
+        <select class="form-select" id="visitType" onchange="handleVisitTypeChange()" aria-required="true">
+          <option value="防火宣導">🚒 防火宣導</option>
+          <option value="防災宣導">🌀 防災宣導</option>
+        </select>
+      </div>
+
       <!-- 案主姓名 -->
       <div class="form-group">
         <label class="form-label" for="clientName">
@@ -150,7 +161,7 @@
 <script>
   // ─── 全域狀態 ───────────────────────────────────────────────
   let questions = [];   // 題庫
-  let answers   = {};   // 使用者答案 { Q01: '是', Q04: ['餐食協助'] }
+  let answers   = {};   // 使用者答案 { F01: '是', F04: ['餐食協助'] }
   let gpsData   = null; // GPS 定位結果
 
   // ─── 初始化 ─────────────────────────────────────────────────
@@ -186,22 +197,7 @@
       if (!res.success) throw new Error(res.error);
 
       questions = res.data || [];
-      container.innerHTML = '';
-
-      if (questions.length === 0) {
-        container.innerHTML = `
-          <div class="card mt-4">
-            <div class="card-body" style="text-align:center;color:var(--text-muted);">
-              <p>⚠️ 訪視題庫目前無題目，請聯絡管理員。</p>
-            </div>
-          </div>`;
-        return;
-      }
-
-      questions.forEach((q, idx) => {
-        const card = buildQuestionCard(q, idx);
-        container.appendChild(card);
-      });
+      renderFilteredQuestions();
 
     } catch (err) {
       container.innerHTML = `
@@ -212,6 +208,65 @@
           </div>
         </div>`;
     }
+  }
+
+  // ─── 變更訪視類型 ───────────────────────────────────────────
+  function handleVisitTypeChange() {
+    answers = {}; // 清空答案防殘留
+    renderFilteredQuestions();
+    updateProgress();
+  }
+
+  // ─── 渲染當前類型的問卷題目 ──────────────────────────────────
+  function renderFilteredQuestions() {
+    const container = document.getElementById('sectionQuestions');
+    container.innerHTML = '';
+
+    const selectedType = document.getElementById('visitType').value;
+    const filtered = questions.filter(q => q.visitType === selectedType);
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div class="card mt-4">
+          <div class="card-body" style="text-align:center;color:var(--text-muted);">
+            <p>⚠️ 該訪視宣導類型目前無題目，請聯絡管理員。</p>
+          </div>
+        </div>`;
+      return;
+    }
+
+    filtered.forEach((q, idx) => {
+      const card = buildQuestionCard(q, idx);
+      container.appendChild(card);
+    });
+
+    evaluateDependencies();
+  }
+
+  // ─── 評估相依題目顯示狀態 ────────────────────────────────────
+  function evaluateDependencies() {
+    const selectedType = document.getElementById('visitType').value;
+    const filtered = questions.filter(q => q.visitType === selectedType);
+
+    filtered.forEach(q => {
+      const card = document.getElementById(`qcard-${q.id}`);
+      if (!card) return;
+
+      if (q.dependency) {
+        const parts = q.dependency.split('=');
+        const depQid = parts[0];
+        const depVal = parts[1];
+
+        // 比對相依題目的值
+        if (answers[depQid] === depVal) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+          delete answers[q.id]; // 隱藏時清空答案
+          markAnswered(q.id, false);
+        }
+      }
+    });
   }
 
   // ─── 載入協同志工名單 ───────────────────────────────────────
@@ -353,6 +408,7 @@
     answers[qid] = val;
 
     markAnswered(qid, true);
+    evaluateDependencies();
     updateProgress();
   }
 
@@ -373,6 +429,7 @@
     }
 
     markAnswered(qid, answers[qid].length > 0);
+    evaluateDependencies();
     updateProgress();
   }
 
@@ -380,6 +437,7 @@
   function handleTextAnswer(qid, val) {
     answers[qid] = val;
     markAnswered(qid, val.trim().length > 0);
+    evaluateDependencies();
     updateProgress();
   }
 
@@ -439,7 +497,19 @@
 
   // ─── 更新進度條 ──────────────────────────────────────────────
   function updateProgress() {
-    const total = questions.length + 1; // +1 為「案家資料」
+    const selectedType = document.getElementById('visitType').value;
+    
+    // 只統計目前顯示的（符合相依條件且為當前類型的）題目
+    const visibleQuestions = questions.filter(q => {
+      if (q.visitType !== selectedType) return false;
+      if (q.dependency) {
+        const parts = q.dependency.split('=');
+        return answers[parts[0]] === parts[1];
+      }
+      return true;
+    });
+
+    const total = visibleQuestions.length + 1; // +1 為「案家資料」
     let done = 0;
 
     const date = document.getElementById('visitDate')?.value;
@@ -447,7 +517,7 @@
     const addr = document.getElementById('clientAddress')?.value?.trim();
     if (date && name && addr) done++;
 
-    questions.forEach(q => {
+    visibleQuestions.forEach(q => {
       const ans = answers[q.id];
       if (Array.isArray(ans) ? ans.length > 0 : ans && String(ans).trim()) done++;
     });
@@ -482,6 +552,7 @@
     if (!session) return;
 
     const visitDate     = document.getElementById('visitDate').value;
+    const visitType     = document.getElementById('visitType').value;
     const clientName    = document.getElementById('clientName').value.trim();
     const clientPhone   = document.getElementById('clientPhone').value.trim();
     const clientAddress = document.getElementById('clientAddress').value.trim();
@@ -504,8 +575,17 @@
       return;
     }
 
-    // 驗證必填題均已作答
-    const unanswered = questions.filter(q => {
+    // 取得目前顯示的所有題目（只驗證有顯示的必填題）
+    const visibleQuestions = questions.filter(q => {
+      if (q.visitType !== visitType) return false;
+      if (q.dependency) {
+        const parts = q.dependency.split('=');
+        return answers[parts[0]] === parts[1];
+      }
+      return true;
+    });
+
+    const unanswered = visibleQuestions.filter(q => {
       if (!q.required) return false;
       const ans = answers[q.id];
       return Array.isArray(ans) ? ans.length === 0 : !ans || !String(ans).trim();
@@ -519,7 +599,7 @@
 
     // 收集協同志工
     const teamMembers = [];
-    document.querySelectorAll('#teammatesContainer .checkbox-option.selected').forEach(el => {
+    document.querySelectorAll('#teammatesContainer .teammate-chip.selected').forEach(el => {
       teamMembers.push(el.dataset.name);
     });
 
@@ -528,6 +608,7 @@
       submitter:     session.name,
       branch:        session.branch,
       visitDate,
+      visitType,
       clientName,
       clientPhone,
       clientAddress,
@@ -536,7 +617,7 @@
       teamMembers,
       answers: { ...answers },
       // 保存題目 metadata 供預覽頁使用
-      questions: questions.map(q => ({
+      questions: visibleQuestions.map(q => ({
         id:      q.id,
         content: q.content,
         type:    q.type,

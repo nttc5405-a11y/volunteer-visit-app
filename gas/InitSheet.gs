@@ -62,11 +62,19 @@ function _createVisitRecordSheet(ss) {
     sheet.clearFormats();
   }
 
+  // 先定義基本欄位
   var headers = [
-    '流水號', '填報時間', '訪視日期', '主填寫人姓名', '協同志工',
-    '所屬分隊', '案家姓名', '案家電話', '案家地址', 'GPS定位座標',
-    'Q01', 'Q02', 'Q03', 'Q04', 'Q05'
+    '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
+    '所屬分隊', '案家姓名', '案家電話', '案家地址', 'GPS定位座標'
   ];
+  
+  // 動態把 F01~F24, D01~D18 加入標頭
+  for (var f = 1; f <= 24; f++) {
+    headers.push('F' + String(f).padStart(2, '0'));
+  }
+  for (var d = 1; d <= 18; d++) {
+    headers.push('D' + String(d).padStart(2, '0'));
+  }
 
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
@@ -78,13 +86,14 @@ function _createVisitRecordSheet(ss) {
   sheet.setColumnWidth(1, 70);   // 流水號
   sheet.setColumnWidth(2, 160);  // 填報時間
   sheet.setColumnWidth(3, 110);  // 訪視日期
-  sheet.setColumnWidth(4, 100);  // 主填寫人
-  sheet.setColumnWidth(5, 120);  // 協同志工
-  sheet.setColumnWidth(6, 90);   // 分隊
-  sheet.setColumnWidth(7, 100);  // 案家姓名
-  sheet.setColumnWidth(8, 120);  // 電話
-  sheet.setColumnWidth(9, 200);  // 地址
-  sheet.setColumnWidth(10, 180); // GPS
+  sheet.setColumnWidth(4, 90);   // 訪視類型
+  sheet.setColumnWidth(5, 100);  // 主填寫人
+  sheet.setColumnWidth(6, 120);  // 協同志工
+  sheet.setColumnWidth(7, 90);   // 分隊
+  sheet.setColumnWidth(8, 100);  // 案家姓名
+  sheet.setColumnWidth(9, 120);  // 電話
+  sheet.setColumnWidth(10, 200); // 地址
+  sheet.setColumnWidth(11, 180); // GPS
 
   Logger.log('✓ 訪視紀錄表 建立完成');
 }
@@ -190,39 +199,81 @@ function _createQuestionSheet(ss) {
     sheet.clearFormats();
   }
 
-  var headers = ['題目代碼', '題目分類', '題目內容', '題型', '選項內容', '必填'];
+  var headers = ['題目代碼', '訪視類型', '依賴條件', '題目分類', '題目內容', '題型', '選項內容', '必填'];
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
   sheet.setFrozenRows(1);
 
   // 題型說明備註
-  sheet.getRange('D1').setNote(
+  sheet.getRange('F1').setNote(
     '支援題型：\n是否題 / 單選題 / 複選題 / 簡答題'
   );
-  sheet.getRange('E1').setNote(
+  sheet.getRange('G1').setNote(
     '選項內容以半形逗號「,」分隔\n簡答題此欄留空'
   );
-  sheet.getRange('F1').setNote(
+  sheet.getRange('H1').setNote(
     '填 TRUE 表必填（前端驗證），\n填 FALSE 或空白表選填'
   );
 
-  // PRD 定義的 5 道範例題目（第6欄：必填）
+  // 防火/防災宣導 題目資料庫
   var questions = [
-    ['Q01', '宣導題',   '是否已向案家宣導住宅用火災警報器之重要性？',   '是否題', '是,否',                                    true],
-    ['Q02', '宣導題',   '是否已向案家宣導用電安全與防範電氣火災？',     '是否題', '是,否',                                    true],
-    ['Q03', '生理健康', '案主今日精神與氣色狀況如何？',                 '單選題', '良好,普通,稍微疲倦,極度不適',               true],
-    ['Q04', '生活需求', '案主目前是否有迫切物資或醫療照護需求？',       '複選題', '餐食協助,醫療就醫,物資缺乏,心理諮商,無需求', true],
-    ['Q05', '綜合紀錄', '請簡述本次訪視的具體狀況或特殊交辦事項。',     '簡答題', '',                                         false]
+    // === 防火宣導 (F01 ~ F24) ===
+    ['F01', '防火宣導', '', '瓦斯安全', '家中是否使用桶裝瓦斯？', '是否題', '是,未使用', true],
+    ['F02', '防火宣導', 'F01=是', '瓦斯安全', '瓦斯桶檢驗期限是否合格無逾期？', '是否題', '是,否', false],
+    ['F03', '防火宣導', 'F01=是', '瓦斯安全', '瓦斯桶外觀及皮管是否有定期檢查，無龜裂、老化、鬆脫、腐蝕或變形現象？', '是否題', '是,否', false],
+    ['F04', '防火宣導', 'F01=是', '瓦斯安全', '使用瓦斯完畢後是否有隨手關緊開關之習慣？', '是否題', '是,否', false],
+    ['F05', '防火宣導', 'F01=是', '瓦斯安全', '是否有與瓦斯業者簽訂液化石油氣定型化契約？', '是否題', '是,否', false],
+    ['F06', '防火宣導', '', '瓦斯安全', '是否知道瓦斯熱水器裝設室內容易造成一氧化碳中毒？', '是否題', '是,否', true],
+    ['F07', '防火宣導', '', '瓦斯安全', '家中是否使用瓦斯熱水器？', '是否題', '是,否', true],
+    ['F08', '防火宣導', 'F07=是', '瓦斯安全', '熱水器是否貼有 CNS 及 TGAS 的標示？', '是否題', '是,否', false],
+    ['F09', '防火宣導', 'F07=是', '瓦斯安全', '裝設熱水器位置(如陽台)是否通風良好？', '是否題', '是,否', false],
+    ['F10', '防火宣導', 'F07=是', '瓦斯安全', '家中是否有裝置一氧化碳警報器？', '是否題', '是,否', false],
+    ['F11', '防火宣導', '', '電氣安全', '家中電器插座、插頭是否插定位並保持乾淨？', '是否題', '是,否', true],
+    ['F12', '防火宣導', '', '電氣安全', '是否知道電器用品電源線不可捆綁或重壓？', '是否題', '是,否', true],
+    ['F13', '防火宣導', '', '電氣安全', '家中高用電量電器電源線是否使用個別插座？', '是否題', '是,否', true],
+    ['F14', '防火宣導', '', '電氣安全', '神桌燈具或魚缸馬達是否定期檢查或更換？', '是否題', '是,否', true],
+    ['F15', '防火宣導', '', '避難逃生', '排煙機及排煙管油垢是否定期清洗？', '是否題', '是,否', true],
+    ['F16', '防火宣導', '', '避難逃生', '樓梯處及其他逃生通道是否無堆放雜物？', '是否題', '是,否', true],
+    ['F17', '防火宣導', '', '避難逃生', '家中陽台裝設之鐵窗是否有預留安全出口並保持可以開啟？', '是否題', '是,否', true],
+    ['F18', '防火宣導', '', '避難逃生', '家中是否有 2 個以上不同方向逃生出口？', '是否題', '是,否', true],
+    ['F19', '防火宣導', '', '避難逃生', '是否有訂定家庭逃生計畫及演練？', '是否題', '是,否', true],
+    ['F20', '防火宣導', '', '消防常識', '您家中是否有消防設備？', '是否題', '是,否', true],
+    ['F21', '防火宣導', 'F20=是', '消防常識', '家中擁有的消防設備 (可多選)', '複選題', '滅火器,緊急照明燈,住宅用火災警報器,其他', false],
+    ['F22', '防火宣導', 'F20=是', '消防常識', '家中消防設備外觀、性能是否正常？', '是否題', '是,否', false],
+    ['F23', '防火宣導', '', '改善建議', '防火改善建議事項 (可多選)', '複選題', '更換合格瓦斯鋼瓶,定期檢查瓦斯桶與皮管,簽訂瓦斯定型化契約,定期檢查熱水器與配線,定期檢查插座與延長線,養成巡視並關閉火源習慣,排煙機及排煙管定期清洗,勿在逃生通道堆放雜物,鐵窗預留出口並保持開啟,訂定家庭逃生計畫,購設消防設備,定期檢查消防設備,其他建議', false],
+    ['F24', '防火宣導', '', '追蹤訪視', '需要追蹤訪視？', '是否題', '是,否', true],
+
+    // === 防災宣導 (D01 ~ D18) ===
+    ['D01', '防災宣導', '', '颱風防汛', '是否知道颱風易發生於什麼季節及帶來的主要災害？', '是否題', '是,否', true],
+    ['D02', '防災宣導', '', '颱風防汛', '是否知道颱風海上、陸上颱風警報發佈時機？', '是否題', '是,否', true],
+    ['D03', '防災宣導', '', '土石流防災', '是否有檢視住在土石流危險區？若是，是否知道紅黃色警戒值發佈時機？', '是否題', '是,否', true],
+    ['D04', '防災宣導', '', '颱風防汛', '是否知道颱風來臨前應做的防範措施為何？', '是否題', '是,否', true],
+    ['D05', '防災宣導', '', '颱風防汛', '颱風來臨時是否知道不可至海堤或河床觀潮、戲水？', '是否題', '是,否', true],
+    ['D06', '防災宣導', '', '緊急避難', '是否知道緊急避難包內『緊急帶出品』應備妥什麼？', '是否題', '是,否', true],
+    ['D07', '防災宣導', '', '緊急避難', '是否知道會由哪些人員來執行及協助疏散動作？', '是否題', '是,否', true],
+    ['D08', '防災宣導', '', '緊急避難', '是否知道該區規劃的避難收容所及避難路線？', '是否題', '是,否', true],
+    ['D09', '防災宣導', '', '緊急避難', '若發現有人員受困是否知道如何報案及報案電話？', '是否題', '是,否', true],
+    ['D10', '防災宣導', '', '地震防災', '是否對地震災害有所了解？', '是否題', '是,否', true],
+    ['D11', '防災宣導', '', '地震防災', '是否有針對居家環境安全進行檢視？', '是否題', '是,否', true],
+    ['D12', '防災宣導', '', '地震防災', '家中大型傢俱是否有固定措施以避免倒塌？', '是否題', '是,否', true],
+    ['D13', '防災宣導', '', '地震防災', '是否知道地震災害時，應優先關閉電源、火源及保持房門暢通？', '是否題', '是,否', true],
+    ['D14', '防災宣導', '', '地震防災', '是否知道地震來臨時，室內或室外應如何進行應變？', '是否題', '是,否', true],
+    ['D15', '防災宣導', '', '地震防災', '是否知道居家四周的空曠地點及避難疏散安全路線？', '是否題', '是,否', true],
+    ['D16', '防災宣導', '', '地震防災', '是否知道地震過後，居家建築檢查應注意事項？', '是否題', '是,否', true],
+    ['D17', '防災宣導', '', '災害認知', '對災害了解程度', '單選題', '了解(答否3項以下),尚可(答否4項以下),不了解(答否6項以上)', true],
+    ['D18', '防災宣導', '', '改善建議', '防災改善建議事項 (可多選)', '複選題', '制定家庭避難逃生計畫,家具燈具盡可能固定,養成巡視並關閉火源習慣,勿在逃生通道堆放雜物,準備緊急避難包,其他建議', false]
   ];
 
   questions.forEach(function(row) { sheet.appendRow(row); });
 
   sheet.setColumnWidth(1, 80);
   sheet.setColumnWidth(2, 90);
-  sheet.setColumnWidth(3, 280);
-  sheet.setColumnWidth(4, 80);
-  sheet.setColumnWidth(5, 220);
-  sheet.setColumnWidth(6, 60);
+  sheet.setColumnWidth(3, 90);
+  sheet.setColumnWidth(4, 90);
+  sheet.setColumnWidth(5, 280);
+  sheet.setColumnWidth(6, 80);
+  sheet.setColumnWidth(7, 220);
+  sheet.setColumnWidth(8, 60);
 
   Logger.log('✓ 訪視題庫 建立完成（' + questions.length + ' 題）');
 }
@@ -279,10 +330,17 @@ function createBranchSheets() {
 
   // 取得主試算表標題列（用於同步至分隊表）
   var mainRecordSheet = mainSS.getSheetByName('訪視紀錄表');
-  var mainHeaders = mainRecordSheet
-    ? mainRecordSheet.getRange(1, 1, 1, mainRecordSheet.getLastColumn()).getValues()[0]
-    : ['流水號','填報時間','訪視日期','主填寫人姓名','協同志工','所屬分隊',
-       '案家姓名','案家電話','案家地址','GPS定位座標','Q01','Q02','Q03','Q04','Q05'];
+  var mainHeaders = [];
+  if (mainRecordSheet) {
+    mainHeaders = mainRecordSheet.getRange(1, 1, 1, mainRecordSheet.getLastColumn()).getValues()[0];
+  } else {
+    mainHeaders = [
+      '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
+      '所屬分隊', '案家姓名', '案家電話', '案家地址', 'GPS定位座標'
+    ];
+    for (var f = 1; f <= 24; f++) mainHeaders.push('F' + String(f).padStart(2, '0'));
+    for (var d = 1; d <= 18; d++) mainHeaders.push('D' + String(d).padStart(2, '0'));
+  }
 
   // 逐列處理分隊
   for (var i = 1; i < branchData.length; i++) {
@@ -317,13 +375,14 @@ function createBranchSheets() {
       recordSheet.setColumnWidth(1, 70);   // 流水號
       recordSheet.setColumnWidth(2, 160);  // 填報時間
       recordSheet.setColumnWidth(3, 110);  // 訪視日期
-      recordSheet.setColumnWidth(4, 100);  // 主填寫人
-      recordSheet.setColumnWidth(5, 120);  // 協同志工
-      recordSheet.setColumnWidth(6, 90);   // 分隊
-      recordSheet.setColumnWidth(7, 100);  // 案家姓名
-      recordSheet.setColumnWidth(8, 120);  // 電話
-      recordSheet.setColumnWidth(9, 200);  // 地址
-      recordSheet.setColumnWidth(10, 180); // GPS
+      recordSheet.setColumnWidth(4, 90);   // 訪視類型
+      recordSheet.setColumnWidth(5, 100);  // 主填寫人
+      recordSheet.setColumnWidth(6, 120);  // 協同志工
+      recordSheet.setColumnWidth(7, 90);   // 分隊
+      recordSheet.setColumnWidth(8, 100);  // 案家姓名
+      recordSheet.setColumnWidth(9, 120);  // 電話
+      recordSheet.setColumnWidth(10, 200); // 地址
+      recordSheet.setColumnWidth(11, 180); // GPS
 
       // 建立「分隊資訊」說明工作表
       var infoSheet = newSS.insertSheet('分隊資訊');
