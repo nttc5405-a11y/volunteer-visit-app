@@ -25,26 +25,6 @@
     <!-- 登入表單 -->
     <div class="login-form">
 
-      <!-- 選擇分隊 -->
-      <div class="form-group">
-        <label class="form-label" for="branchSelect">
-          🏢 選擇您的分隊 <span class="req">*</span>
-        </label>
-        <select class="form-select" id="branchSelect" onchange="handleBranchChange()" aria-required="true">
-          <option value="">— 載入中... —</option>
-        </select>
-      </div>
-
-      <!-- 選擇姓名 -->
-      <div class="form-group">
-        <label class="form-label" for="nameSelect">
-          👤 選擇您的姓名 <span class="req">*</span>
-        </label>
-        <select class="form-select" id="nameSelect" aria-required="true" disabled>
-          <option value="">— 請先選擇分隊 —</option>
-        </select>
-      </div>
-
       <!-- 身分證字號末三碼 -->
       <div class="form-group">
         <label class="form-label" for="idCardInput">
@@ -78,10 +58,21 @@
           autocomplete="off"
           aria-required="true"
         >
-        <!-- 錯誤訊息 -->
-        <div class="field-error hidden" id="loginError" role="alert" aria-live="polite">
-          ⚠️ <span id="loginErrorText"></span>
-        </div>
+      </div>
+
+      <!-- 姓名重合核對選單 (預設隱藏) -->
+      <div id="disambiguationContainer" class="form-group hidden anim-slide-up">
+        <label class="form-label" for="disambiguationSelect">
+          👤 發現重複的人員，請選擇您的姓名與分隊 <span class="req">*</span>
+        </label>
+        <select class="form-select" id="disambiguationSelect">
+          <option value="">— 請選擇您的姓名與所屬單位 —</option>
+        </select>
+      </div>
+
+      <!-- 錯誤訊息 -->
+      <div class="field-error hidden" id="loginError" role="alert" aria-live="polite">
+        ⚠️ <span id="loginErrorText"></span>
       </div>
 
       <!-- 登入按鈕 -->
@@ -120,98 +111,29 @@
       window.location.href = 'form.html';
       return;
     }
-    await loadMembers();
-  }
-
-  // ─── 人員資料（全域） ─────────────────────────────────────
-  let _allMembers = [];
-
-  // ─── 載入人員名單 ─────────────────────────────────────────
-  async function loadMembers() {
-    const branchSelect = document.getElementById('branchSelect');
-    branchSelect.innerHTML = '<option value="">— 載入中... —</option>';
-    branchSelect.disabled = true;
-
-    try {
-      const res = await API.getAllMembers();
-      if (!res.success) throw new Error(res.error);
-
-      _allMembers = res.data || [];
-
-      // 取得所有不重複的分隊名稱
-      const branches = [...new Set(_allMembers.map(m => m.branch))].filter(Boolean);
-      
-      branchSelect.innerHTML = '<option value="">— 請選擇您的分隊 —</option>';
-      branches.sort((a, b) => a.localeCompare(b, 'zh-TW')).forEach(b => {
-        const opt = document.createElement('option');
-        opt.value = b;
-        opt.textContent = b;
-        branchSelect.appendChild(opt);
-      });
-      branchSelect.disabled = false;
-
-    } catch (err) {
-      branchSelect.innerHTML = `<option value="">⚠️ 載入失敗，請重新整理</option>`;
-      Toast.error('無法載入人員名單：' + err.message);
-    }
-  }
-
-  // ─── 當選擇分隊改變時，動態更新人員名單 ─────────────────────
-  function handleBranchChange() {
-    const branchSelect = document.getElementById('branchSelect');
-    const nameSelect   = document.getElementById('nameSelect');
-    const selectedBranch = branchSelect.value;
-
-    nameSelect.innerHTML = '';
-    
-    if (!selectedBranch) {
-      nameSelect.innerHTML = '<option value="">— 請先選擇分隊 —</option>';
-      nameSelect.disabled = true;
-      return;
-    }
-
-    const filteredMembers = _allMembers.filter(m => m.branch === selectedBranch);
-    
-    nameSelect.innerHTML = '<option value="">— 請選擇您的姓名 —</option>';
-    filteredMembers.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW')).forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.name;
-      opt.textContent = m.role !== '志工' ? `${m.name}（${m.role}）` : m.name;
-      nameSelect.appendChild(opt);
-    });
-    nameSelect.disabled = false;
   }
 
   // ─── 登入處理 ─────────────────────────────────────────────
   async function handleLogin() {
-    const branchSelect   = document.getElementById('branchSelect');
-    const nameSelect     = document.getElementById('nameSelect');
     const idCardInput    = document.getElementById('idCardInput');
     const phoneInput     = document.getElementById('phoneInput');
+    const disambigSelect = document.getElementById('disambiguationSelect');
+    const disambigCont   = document.getElementById('disambiguationContainer');
     const loginBtn       = document.getElementById('loginBtn');
     const loginError     = document.getElementById('loginError');
     const loginErrorText = document.getElementById('loginErrorText');
 
-    const name   = nameSelect.value.trim();
     const idCard = idCardInput.value.trim().toUpperCase();
     const phone  = phoneInput.value.trim();
+    const name   = disambigSelect.value.trim(); // 只有當選單顯示且使用者選取時，才會有此值
 
     // 隱藏舊錯誤
     loginError.classList.add('hidden');
     phoneInput.style.borderColor = '';
     idCardInput.style.borderColor = '';
-    nameSelect.style.borderColor = '';
-    branchSelect.style.borderColor = '';
+    disambigSelect.style.borderColor = '';
 
     // 驗證
-    if (!branchSelect.value) {
-      _showError('請選擇您的分隊', branchSelect);
-      return;
-    }
-    if (!name) {
-      _showError('請選擇您的姓名', nameSelect);
-      return;
-    }
     if (idCard.length !== 3) {
       _showError('請輸入身分證字號末 3 碼', idCardInput);
       return;
@@ -221,13 +143,20 @@
       return;
     }
 
+    // 如果出現重複人名，且使用者還沒選
+    if (!disambigCont.classList.contains('hidden') && !name) {
+      _showError('請選擇您的姓名與所屬單位', disambigSelect);
+      return;
+    }
+
     // 送出驗證
     loginBtn.disabled = true;
     document.getElementById('loginBtnIcon').textContent = '⏳';
     document.getElementById('loginBtnText').textContent = '驗證中...';
 
     try {
-      const res = await API.verifyLogin(name, idCard, phone);
+      // 呼叫 API：如果需要核對則 name 傳空，否則傳選取的 name
+      const res = await API.verifyLogin(idCard, phone, name);
 
       if (res.success) {
         Session.set({ ...res.user, loginTime: new Date().toISOString() });
@@ -238,6 +167,21 @@
         document.getElementById('loginBtnText').textContent = '驗證成功，正在進入...';
 
         setTimeout(() => { window.location.href = 'form.html'; }, 700);
+
+      } else if (res.needNameDisambiguation) {
+        // 重重複名稱處理：填入下拉選單
+        disambigSelect.innerHTML = '<option value="">— 請選擇您的姓名與所屬單位 —</option>';
+        res.candidates.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.name;
+          opt.textContent = `${c.name}（${c.branch}）`;
+          disambigSelect.appendChild(opt);
+        });
+
+        disambigCont.classList.remove('hidden');
+        Toast.warning('發現重複資料，請在下方選單確認您的姓名與分隊！');
+        _resetBtn();
+        disambigSelect.focus();
 
       } else {
         _showError(res.error || '驗證失敗，請確認資料是否正確');
@@ -266,14 +210,31 @@
     }
   }
 
+  // ─── 監聽輸入值改變（若使用者重新修改末三碼，應隱藏姓名選單） ─────
+  function handleInputReset() {
+    const disambigCont   = document.getElementById('disambiguationContainer');
+    const disambigSelect = document.getElementById('disambiguationSelect');
+    if (!disambigCont.classList.contains('hidden')) {
+      disambigCont.classList.add('hidden');
+      disambigSelect.innerHTML = '<option value="">— 請選擇您的姓名與所屬單位 —</option>';
+    }
+  }
+
   // ─── 初始掛載 ─────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
-    // Enter 鍵觸發登入
+    const idCardInput = document.getElementById('idCardInput');
+    const phoneInput  = document.getElementById('phoneInput');
+
+    // 監聽 Enter 送出
     const submitOnEnter = (e) => {
       if (e.key === 'Enter') handleLogin();
     };
-    document.getElementById('phoneInput').addEventListener('keydown', submitOnEnter);
-    document.getElementById('idCardInput').addEventListener('keydown', submitOnEnter);
+    phoneInput.addEventListener('keydown', submitOnEnter);
+    idCardInput.addEventListener('keydown', submitOnEnter);
+
+    // 監聽輸入重設
+    idCardInput.addEventListener('input', handleInputReset);
+    phoneInput.addEventListener('input', handleInputReset);
 
     init();
   });

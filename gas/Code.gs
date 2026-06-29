@@ -37,7 +37,7 @@ function doGet(e) {
         result = getBranches();
         break;
       case 'verifyLogin':
-        result = verifyLogin(params.name, params.idCard, params.phone);
+        result = verifyLogin(params.idCard, params.phone, params.name);
         break;
       default:
         result = { success: false, error: '未知的 action: ' + action };
@@ -208,11 +208,11 @@ function getBranches() {
 }
 
 // ============================================================
-// 登入驗證：比對姓名 + 身分證字號後三碼 + 手機末三碼
+// 登入驗證：比對身分證字號後三碼 + 手機末三碼（若重複則需比對姓名）
 // ============================================================
-function verifyLogin(name, idCardLast3, phoneLast3) {
-  if (!name || !idCardLast3 || !phoneLast3) {
-    return { success: false, error: '請填寫姓名、身分證末三碼與手機末三碼' };
+function verifyLogin(idCardLast3, phoneLast3, name) {
+  if (!idCardLast3 || !phoneLast3) {
+    return { success: false, error: '請填寫身分證末三碼與手機末三碼' };
   }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('人員帳號管理');
@@ -224,6 +224,8 @@ function verifyLogin(name, idCardLast3, phoneLast3) {
   if (idx.name === -1 || idx.phone === -1 || idx.idCard === -1) {
     return { success: false, error: '系統錯誤：人員工作表缺少必要欄位（姓名、手機或身分證字號）' };
   }
+
+  var matches = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
@@ -237,22 +239,50 @@ function verifyLogin(name, idCardLast3, phoneLast3) {
     var memberIdCardLast3 = memberIdCard.slice(-3);
 
     if (
-      memberName === name.trim() && 
       memberIdCardLast3.toUpperCase() === String(idCardLast3).trim().toUpperCase() && 
       memberPhoneLast3 === String(phoneLast3).trim()
     ) {
-      return {
-        success: true,
-        user: {
-          name:   memberName,
-          branch: idx.branch !== -1 ? String(row[idx.branch]).trim() : '',
-          role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工'
-        }
-      };
+      matches.push({
+        name:   memberName,
+        branch: idx.branch !== -1 ? String(row[idx.branch]).trim() : '',
+        role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工'
+      });
     }
   }
 
-  return { success: false, error: '姓名、身分證末三碼或手機末三碼不符，請重新確認' };
+  if (matches.length === 0) {
+    return { success: false, error: '驗證失敗，查無此人員，請確認填寫的末三碼是否正確' };
+  }
+
+  // 如果有姓名參數，進行精確匹配
+  if (name) {
+    var cleanName = String(name).trim();
+    for (var j = 0; j < matches.length; j++) {
+      if (matches[j].name === cleanName) {
+        return {
+          success: true,
+          user: matches[j]
+        };
+      }
+    }
+  }
+
+  // 如果只有一個匹配，直接登入
+  if (matches.length === 1) {
+    return {
+      success: true,
+      user: matches[0]
+    };
+  }
+
+  // 如果有多個匹配，返回需要姓名核對
+  return {
+    success: false,
+    needNameDisambiguation: true,
+    candidates: matches.map(function(m) {
+      return { name: m.name, branch: m.branch };
+    })
+  };
 }
 
 // ============================================================
