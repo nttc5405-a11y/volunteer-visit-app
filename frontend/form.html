@@ -62,15 +62,26 @@
         </select>
       </div>
 
-      <!-- 案主姓名 -->
-      <div class="form-group">
-        <label class="form-label" for="clientName">
-          案主姓名 <span class="req">*</span>
-        </label>
-        <input type="text" class="form-input" id="clientName"
-               placeholder="請輸入案主全名"
-               autocomplete="off"
-               oninput="updateProgress()">
+      <!-- 案主姓名 & 性別 (橫向排列) -->
+      <div class="form-row" style="display:flex; gap:16px; margin-bottom: 16px;">
+        <div class="form-group" style="flex:1; margin-bottom: 0;">
+          <label class="form-label" for="clientName">
+            案主姓名 (受訪者) <span class="req">*</span>
+          </label>
+          <input type="text" class="form-input" id="clientName"
+                 placeholder="請輸入姓名"
+                 autocomplete="off"
+                 oninput="updateProgress()">
+        </div>
+        <div class="form-group" style="width:120px; margin-bottom: 0;">
+          <label class="form-label" for="clientGender">
+            性別 <span class="req">*</span>
+          </label>
+          <select class="form-select" id="clientGender" onchange="updateProgress()" aria-required="true">
+            <option value="男">男</option>
+            <option value="女">女</option>
+          </select>
+        </div>
       </div>
 
       <!-- 聯絡電話 -->
@@ -101,6 +112,84 @@
         </button>
         <div class="gps-result hidden" id="gpsResult">
           <span id="gpsCoordsText"></span>
+        </div>
+      </div>
+
+      <!-- 房屋與居住資訊 -->
+      <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 16px;">
+        <div class="form-group">
+          <label class="form-label" for="houseAge">
+            🏚️ 房屋屋齡 (年)
+          </label>
+          <input type="number" class="form-input" id="houseAge"
+                 placeholder="屋齡" min="0" oninput="updateProgress()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="residentialType">
+            🏠 住宅形式
+          </label>
+          <select class="form-select" id="residentialType" onchange="updateProgress()">
+            <option value="一般住宅">一般住宅</option>
+            <option value="集合住宅">集合住宅</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="buildingStructure">
+            🧱 建築結構
+          </label>
+          <select class="form-select" id="buildingStructure" onchange="updateProgress()">
+            <option value="RC">RC (鋼筋混凝土)</option>
+            <option value="磚造">磚造</option>
+            <option value="鐵皮屋">鐵皮屋</option>
+            <option value="木造">木造</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px;">
+        <div class="form-group">
+          <label class="form-label" for="totalFloors">
+            🏢 建物總層數
+          </label>
+          <input type="number" class="form-input" id="totalFloors"
+                 placeholder="總層數" min="1" oninput="updateProgress()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="residingFloor">
+            📍 居住樓層
+          </label>
+          <input type="number" class="form-input" id="residingFloor"
+                 placeholder="居住樓層" min="1" oninput="updateProgress()">
+        </div>
+      </div>
+
+      <!-- 家庭成員結構 -->
+      <div style="margin-top: 20px; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+        <div style="font-weight: bold; font-size: 0.9rem; color: var(--c-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+          👨‍👩‍👧‍👦 家庭成員結構 (請輸入人數，若無填 0)
+        </div>
+        <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.75rem;" for="familySize">總人數</label>
+            <input type="number" class="form-input" id="familySize" value="0" min="0" oninput="updateProgress()">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.75rem;" for="family65Plus">65歲以上</label>
+            <input type="number" class="form-input" id="family65Plus" value="0" min="0" oninput="updateProgress()">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.75rem;" for="familyDisabled">行動不便</label>
+            <input type="number" class="form-input" id="familyDisabled" value="0" min="0" oninput="updateProgress()">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.75rem;" for="familyUnder6">6歲以下</label>
+            <input type="number" class="form-input" id="familyUnder6" value="0" min="0" oninput="updateProgress()">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.75rem;" for="familyForeigner">外籍人士</label>
+            <input type="number" class="form-input" id="familyForeigner" value="0" min="0" oninput="updateProgress()">
+          </div>
         </div>
       </div>
 
@@ -610,10 +699,21 @@
       visitDate,
       visitType,
       clientName,
+      clientGender:  document.getElementById('clientGender').value,
       clientPhone,
       clientAddress,
       gps:       gpsData ? gpsData.formatted : '',
       gpsAddress: gpsData?.address || '',
+      houseAge:      parseInt(document.getElementById('houseAge').value) || 0,
+      residentialType: document.getElementById('residentialType').value,
+      totalFloors:   parseInt(document.getElementById('totalFloors').value) || 0,
+      residingFloor: parseInt(document.getElementById('residingFloor').value) || 0,
+      buildingStructure: document.getElementById('buildingStructure').value,
+      familySize:    parseInt(document.getElementById('familySize').value) || 0,
+      family65Plus:  parseInt(document.getElementById('family65Plus').value) || 0,
+      familyDisabled:parseInt(document.getElementById('familyDisabled').value) || 0,
+      familyUnder6:  parseInt(document.getElementById('familyUnder6').value) || 0,
+      familyForeigner:parseInt(document.getElementById('familyForeigner').value) || 0,
       teamMembers,
       answers: { ...answers },
       // 保存題目 metadata 供預覽頁使用

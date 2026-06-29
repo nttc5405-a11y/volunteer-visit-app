@@ -313,18 +313,29 @@ function submitForm(record) {
   // 組合列資料
   var rowData = [
     id,
-    new Date(),               // 填報時間
-    record.visitDate || '',   // 訪視日期
-    record.visitType || '',   // 訪視類型
+    new Date(),                       // 填報時間
+    record.visitDate || '',           // 訪視日期
+    record.visitType || '',           // 訪視類型
     record.submitter || '',
     Array.isArray(record.teamMembers)
       ? record.teamMembers.join(',')
       : (record.teamMembers || ''),
     record.branch    || '',
     record.clientName || '',
+    record.clientGender || '',        // 案家性別
     record.clientPhone || '',
     record.clientAddress || '',
-    record.gps       || ''
+    record.gps       || '',           // GPS定位座標
+    record.houseAge !== undefined ? String(record.houseAge) : '', // 房屋屋齡
+    record.residentialType || '',     // 住宅形式
+    record.totalFloors !== undefined ? String(record.totalFloors) : '', // 總樓層
+    record.residingFloor !== undefined ? String(record.residingFloor) : '', // 居住樓層
+    record.buildingStructure || '',   // 建築結構
+    record.familySize !== undefined ? String(record.familySize) : '', // 家庭總人數
+    record.family65Plus !== undefined ? String(record.family65Plus) : '', // 65歲以上
+    record.familyDisabled !== undefined ? String(record.familyDisabled) : '', // 行動不便
+    record.familyUnder6 !== undefined ? String(record.familyUnder6) : '', // 6歲以下
+    record.familyForeigner !== undefined ? String(record.familyForeigner) : '' // 外籍人士
   ];
 
   // 依題目順序附加答案

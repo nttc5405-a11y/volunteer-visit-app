@@ -159,12 +159,15 @@
   function renderClient(data) {
     const items = [
       { label: '訪視日期', value: data.visitDate || '<span style="color:var(--text-muted)">未填寫</span>' },
-      { label: '案主姓名', value: data.clientName },
+      { label: '案主姓名', value: `${data.clientName || ''}（${data.clientGender || '男'}）` },
       { label: '聯絡電話', value: data.clientPhone || '<span style="color:var(--text-muted)">未填寫</span>' },
       { label: '居住地址', value: data.clientAddress },
       { label: 'GPS 座標',  value: data.gps
           ? `<span style="font-size:.8rem;font-family:monospace;">${data.gps}</span>`
           : '<span style="color:var(--text-muted)">未定位</span>' },
+      { label: '房屋屋齡', value: `${data.houseAge || 0} 年` },
+      { label: '住宅形式', value: `${data.residentialType || '一般住宅'}（${data.buildingStructure || 'RC'}，共 ${data.totalFloors || 0} 層，居住於 ${data.residingFloor || 0} 樓）` },
+      { label: '家庭成員', value: `共 ${data.familySize || 0} 人（65歲以上: ${data.family65Plus || 0}人, 行動不便: ${data.familyDisabled || 0}人, 6歲以下: ${data.familyUnder6 || 0}人, 外籍人士: ${data.familyForeigner || 0}人）` }
     ];
 
     document.getElementById('clientSection').innerHTML =
@@ -232,9 +235,20 @@
         visitDate:     data.visitDate     || '',
         visitType:     data.visitType     || '防火宣導',
         clientName:    data.clientName,
+        clientGender:  data.clientGender  || '男',
         clientPhone:   data.clientPhone   || '',
         clientAddress: data.clientAddress || '',
         gps:           data.gps           || '',
+        houseAge:      data.houseAge      || 0,
+        residentialType: data.residentialType || '一般住宅',
+        totalFloors:   data.totalFloors   || 0,
+        residingFloor: data.residingFloor || 0,
+        buildingStructure: data.buildingStructure || 'RC',
+        familySize:    data.familySize    || 0,
+        family65Plus:  data.family65Plus  || 0,
+        familyDisabled:data.familyDisabled|| 0,
+        familyUnder6:  data.familyUnder6  || 0,
+        familyForeigner:data.familyForeigner|| 0,
         teamMembers:   data.teamMembers   || [],
         answers:       data.answers       || {},
       };

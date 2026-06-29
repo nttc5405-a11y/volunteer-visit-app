@@ -65,7 +65,9 @@ function _createVisitRecordSheet(ss) {
   // 先定義基本欄位
   var headers = [
     '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
-    '所屬分隊', '案家姓名', '案家電話', '案家地址', 'GPS定位座標'
+    '所屬分隊', '案家姓名', '案家性別', '案家電話', '案家地址', 'GPS定位座標',
+    '房屋屋齡', '住宅形式', '總樓層', '居住樓層', '建築結構',
+    '家庭總人數', '家庭65歲以上人數', '家庭行動不便人數', '家庭6歲以下人數', '家庭外籍人士人數'
   ];
   
   // 動態把 F01~F24, D01~D18 加入標頭
@@ -91,9 +93,20 @@ function _createVisitRecordSheet(ss) {
   sheet.setColumnWidth(6, 120);  // 協同志工
   sheet.setColumnWidth(7, 90);   // 分隊
   sheet.setColumnWidth(8, 100);  // 案家姓名
-  sheet.setColumnWidth(9, 120);  // 電話
-  sheet.setColumnWidth(10, 200); // 地址
-  sheet.setColumnWidth(11, 180); // GPS
+  sheet.setColumnWidth(9, 70);   // 案家性別
+  sheet.setColumnWidth(10, 120); // 電話
+  sheet.setColumnWidth(11, 200); // 地址
+  sheet.setColumnWidth(12, 180); // GPS
+  sheet.setColumnWidth(13, 80);  // 房屋屋齡
+  sheet.setColumnWidth(14, 90);  // 住宅形式
+  sheet.setColumnWidth(15, 70);  // 總樓層
+  sheet.setColumnWidth(16, 70);  // 居住樓層
+  sheet.setColumnWidth(17, 90);  // 建築結構
+  sheet.setColumnWidth(18, 90);  // 家庭總人數
+  sheet.setColumnWidth(19, 110); // 65歲以上
+  sheet.setColumnWidth(20, 110); // 行動不便
+  sheet.setColumnWidth(21, 110); // 6歲以下
+  sheet.setColumnWidth(22, 110); // 外籍人士
 
   Logger.log('✓ 訪視紀錄表 建立完成');
 }
@@ -336,7 +349,9 @@ function createBranchSheets() {
   } else {
     mainHeaders = [
       '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
-      '所屬分隊', '案家姓名', '案家電話', '案家地址', 'GPS定位座標'
+      '所屬分隊', '案家姓名', '案家性別', '案家電話', '案家地址', 'GPS定位座標',
+      '房屋屋齡', '住宅形式', '總樓層', '居住樓層', '建築結構',
+      '家庭總人數', '家庭65歲以上人數', '家庭行動不便人數', '家庭6歲以下人數', '家庭外籍人士人數'
     ];
     for (var f = 1; f <= 24; f++) mainHeaders.push('F' + String(f).padStart(2, '0'));
     for (var d = 1; d <= 18; d++) mainHeaders.push('D' + String(d).padStart(2, '0'));
@@ -380,9 +395,20 @@ function createBranchSheets() {
       recordSheet.setColumnWidth(6, 120);  // 協同志工
       recordSheet.setColumnWidth(7, 90);   // 分隊
       recordSheet.setColumnWidth(8, 100);  // 案家姓名
-      recordSheet.setColumnWidth(9, 120);  // 電話
-      recordSheet.setColumnWidth(10, 200); // 地址
-      recordSheet.setColumnWidth(11, 180); // GPS
+      recordSheet.setColumnWidth(9, 70);   // 案家性別
+      recordSheet.setColumnWidth(10, 120); // 電話
+      recordSheet.setColumnWidth(11, 200); // 地址
+      recordSheet.setColumnWidth(12, 180); // GPS
+      recordSheet.setColumnWidth(13, 80);  // 房屋屋齡
+      recordSheet.setColumnWidth(14, 90);  // 住宅形式
+      recordSheet.setColumnWidth(15, 70);  // 總樓層
+      recordSheet.setColumnWidth(16, 70);  // 居住樓層
+      recordSheet.setColumnWidth(17, 90);  // 建築結構
+      recordSheet.setColumnWidth(18, 90);  // 家庭總人數
+      recordSheet.setColumnWidth(19, 110); // 65歲以上
+      recordSheet.setColumnWidth(20, 110); // 行動不便
+      recordSheet.setColumnWidth(21, 110); // 6歲以下
+      recordSheet.setColumnWidth(22, 110); // 外籍人士
 
       // 建立「分隊資訊」說明工作表
       var infoSheet = newSS.insertSheet('分隊資訊');
