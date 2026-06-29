@@ -1,6 +1,13 @@
 /**
  * 志工居家訪視系統 — Google Sheets 初始化腳本
  *
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║  可執行的函式列表：                                           ║
+ * ║  1. initializeSheets()   → 建立主資料庫的 4 張工作表          ║
+ * ║  2. createBranchSheets() → 自動建立 3 個分隊專屬試算表        ║
+ * ║  3. resetAllSheets()     → 重置所有資料（謹慎使用）           ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ *
  * ===== 使用方式 =====
  * 在 Google Apps Script 編輯器中，
  * 選擇函式「initializeSheets」，點擊執行（▶）。
@@ -240,5 +247,114 @@ function resetAllSheets() {
 
   if (confirm === ui.Button.YES) {
     initializeSheets();
+  }
+}
+
+// ============================================================
+// 自動建立三個分隊專屬試算表，並回填 ID 至「分隊對照表」
+//
+// 使用方式：
+//   在 Apps Script 編輯器選擇「createBranchSheets」→ 點執行
+//   執行後請查看「執行記錄」取得各分隊試算表連結
+// ============================================================
+function createBranchSheets() {
+  var mainSS      = SpreadsheetApp.getActiveSpreadsheet();
+  var branchSheet = mainSS.getSheetByName('分隊對照表');
+
+  if (!branchSheet) {
+    SpreadsheetApp.getUi().alert('❌ 找不到「分隊對照表」，請先執行 initializeSheets()。');
+    return;
+  }
+
+  var branchData = branchSheet.getDataRange().getValues();
+  var resultLines = [];
+
+  // 取得主試算表標題列（用於同步至分隊表）
+  var mainRecordSheet = mainSS.getSheetByName('訪視紀錄表');
+  var mainHeaders = mainRecordSheet
+    ? mainRecordSheet.getRange(1, 1, 1, mainRecordSheet.getLastColumn()).getValues()[0]
+    : ['流水號','訪視日期時間','主填寫人姓名','協同志工','所屬分隊',
+       '案家姓名','案家電話','案家地址','GPS定位座標','Q01','Q02','Q03','Q04','Q05'];
+
+  // 逐列處理分隊
+  for (var i = 1; i < branchData.length; i++) {
+    var row        = branchData[i];
+    var branchName = String(row[0]).trim();
+    var manager    = String(row[1]).trim();
+    var existingId = String(row[2]).trim();
+
+    if (!branchName) continue;
+
+    // 若已有試算表 ID 則跳過，不重複建立
+    if (existingId && existingId.length > 10) {
+      Logger.log('⏭️ 「' + branchName + '」已有試算表，略過（ID: ' + existingId + '）');
+      resultLines.push('⏭️ ' + branchName + '：已存在，未重新建立');
+      continue;
+    }
+
+    try {
+      // 建立新試算表
+      var newSS   = SpreadsheetApp.create('志工訪視_' + branchName);
+      var newId   = newSS.getId();
+      var newUrl  = newSS.getUrl();
+
+      // 建立「訪視紀錄」工作表
+      var recordSheet = newSS.getSheets()[0];
+      recordSheet.setName('訪視紀錄');
+      recordSheet.appendRow(mainHeaders);
+      _styleHeader(recordSheet, mainHeaders.length);
+      recordSheet.setFrozenRows(1);
+
+      // 調整欄寬（與主表相同）
+      recordSheet.setColumnWidth(1, 70);
+      recordSheet.setColumnWidth(2, 160);
+      recordSheet.setColumnWidth(3, 100);
+      recordSheet.setColumnWidth(4, 120);
+      recordSheet.setColumnWidth(5, 90);
+      recordSheet.setColumnWidth(6, 100);
+      recordSheet.setColumnWidth(7, 120);
+      recordSheet.setColumnWidth(8, 200);
+      recordSheet.setColumnWidth(9, 180);
+
+      // 建立「分隊資訊」說明工作表
+      var infoSheet = newSS.insertSheet('分隊資訊');
+      infoSheet.appendRow(['分隊名稱', branchName]);
+      infoSheet.appendRow(['承辦人', manager]);
+      infoSheet.appendRow(['建立時間', new Date()]);
+      infoSheet.appendRow(['說明', '本試算表由系統自動建立，存放「' + branchName + '」的訪視紀錄。']);
+      infoSheet.appendRow(['', '請勿修改「訪視紀錄」工作表的標題列。']);
+      infoSheet.setColumnWidth(1, 100);
+      infoSheet.setColumnWidth(2, 300);
+
+      // 將試算表 ID 回填至「分隊對照表」的 C 欄
+      branchSheet.getRange(i + 1, 3).setValue(newId);
+
+      Logger.log('✅ 建立完成：' + branchName);
+      Logger.log('   試算表ID：' + newId);
+      Logger.log('   連結：' + newUrl);
+
+      resultLines.push('✅ ' + branchName + '\n   ID: ' + newId + '\n   連結: ' + newUrl);
+
+    } catch (err) {
+      Logger.log('❌ 建立「' + branchName + '」失敗：' + err.toString());
+      resultLines.push('❌ ' + branchName + '：建立失敗（' + err.message + '）');
+    }
+  }
+
+  // 完成提示
+  var summary = resultLines.join('\n\n');
+  Logger.log('\n===== 建立完畢 =====\n' + summary);
+
+  try {
+    SpreadsheetApp.getUi().alert(
+      '✅ 分隊試算表建立完成！\n\n' +
+      '各分隊試算表已建立，ID 已自動填入「分隊對照表」。\n\n' +
+      '⚠️ 下一步：\n' +
+      '請在各分隊試算表的「共用」設定中，\n' +
+      '將各分隊承辦人的 Gmail 設為「編輯者」。\n\n' +
+      '詳細連結請查看「執行記錄」（View → Logs）。'
+    );
+  } catch (e) {
+    // 非 UI 環境
   }
 }
