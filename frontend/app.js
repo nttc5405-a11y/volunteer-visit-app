@@ -223,8 +223,9 @@ const GPS = {
   },
 
   /**
-   * 反向地理編碼（座標 → 可讀地址）
-   * 使用 OpenStreetMap Nominatim（免費，無需 API Key）
+   * 反向地理編碼（座標 → 台灣格式地址）
+   * 使用 OpenStreetMap Nominatim，解析 address 物件組合台灣慣用寫法：
+   * 縣市 + 鄉鎮區 + 路段 + 門牌
    */
   async reverseGeocode(lat, lng) {
     try {
@@ -233,7 +234,20 @@ const GPS = {
         { headers: { 'Accept-Language': 'zh-TW,zh;q=0.9' } }
       );
       const data = await res.json();
-      return data.display_name || '';
+      if (!data.address) return '';
+
+      const a = data.address;
+      // 縣市
+      const county = a.county || a.city || a.state || '';
+      // 鄉鎮區
+      const district = a.town || a.township || a.suburb || a.village || '';
+      // 路段（road 或 neighbourhood）
+      const road = a.road || a.neighbourhood || '';
+      // 門牌（house_number）
+      const num = a.house_number ? `${a.house_number}號` : '';
+
+      const parts = [county, district, road, num].filter(Boolean);
+      return parts.join('');
     } catch (_) { return ''; }
   },
 };

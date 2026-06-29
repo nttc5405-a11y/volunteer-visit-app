@@ -516,6 +516,24 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   flex-shrink: 0;
   margin-top: 3px;
 }
+.q-required {
+  font-size: .7rem; font-weight: 700;
+  color: #fff;
+  background: var(--c-danger);
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.q-optional {
+  font-size: .7rem; font-weight: 600;
+  color: var(--text-muted);
+  background: #E2E8F0;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
 .q-text {
   font-size: .9375rem; font-weight: 600;
   color: var(--text-primary);
@@ -748,6 +766,50 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   animation: fadeIn .25s var(--ease);
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ============================================================
+   姓名搜尋下拉清單
+   ============================================================ */
+.name-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1.5px solid var(--border-focus);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 100;
+}
+.name-dropdown-group {
+  padding: 6px 14px 4px;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+}
+.name-dropdown-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: .95rem;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background .15s;
+}
+.name-dropdown-item:last-child { border-bottom: none; }
+.name-dropdown-item:hover,
+.name-dropdown-item:focus { background: var(--bg-subtle); }
+.name-dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: .9rem;
+}
 
 /* ============================================================
    桌面端（540px 以上）fallback

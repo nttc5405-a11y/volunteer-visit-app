@@ -186,7 +186,7 @@ function _createQuestionSheet(ss) {
     sheet.clearFormats();
   }
 
-  var headers = ['題目代碼', '題目分類', '題目內容', '題型', '選項內容'];
+  var headers = ['題目代碼', '題目分類', '題目內容', '題型', '選項內容', '必填'];
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
   sheet.setFrozenRows(1);
@@ -198,14 +198,17 @@ function _createQuestionSheet(ss) {
   sheet.getRange('E1').setNote(
     '選項內容以半形逗號「,」分隔\n簡答題此欄留空'
   );
+  sheet.getRange('F1').setNote(
+    '填 TRUE 表必填（前端驗證），\n填 FALSE 或空白表選填'
+  );
 
-  // PRD 定義的 5 道範例題目
+  // PRD 定義的 5 道範例題目（第6欄：必填）
   var questions = [
-    ['Q01', '宣導題',  '是否已向案家宣導住宅用火災警報器之重要性？',    '是否題', '是,否'],
-    ['Q02', '宣導題',  '是否已向案家宣導用電安全與防範電氣火災？',      '是否題', '是,否'],
-    ['Q03', '生理健康', '案主今日精神與氣色狀況如何？',                 '單選題', '良好,普通,稍微疲倦,極度不適'],
-    ['Q04', '生活需求', '案主目前是否有迫切物資或醫療照護需求？',        '複選題', '餐食協助,醫療就醫,物資缺乏,心理諮商,無需求'],
-    ['Q05', '綜合紀錄', '請簡述本次訪視的具體狀況或特殊交辦事項。',      '簡答題', '']
+    ['Q01', '宣導題',   '是否已向案家宣導住宅用火災警報器之重要性？',   '是否題', '是,否',                                    true],
+    ['Q02', '宣導題',   '是否已向案家宣導用電安全與防範電氣火災？',     '是否題', '是,否',                                    true],
+    ['Q03', '生理健康', '案主今日精神與氣色狀況如何？',                 '單選題', '良好,普通,稍微疲倦,極度不適',               true],
+    ['Q04', '生活需求', '案主目前是否有迫切物資或醫療照護需求？',       '複選題', '餐食協助,醫療就醫,物資缺乏,心理諮商,無需求', true],
+    ['Q05', '綜合紀錄', '請簡述本次訪視的具體狀況或特殊交辦事項。',     '簡答題', '',                                         false]
   ];
 
   questions.forEach(function(row) { sheet.appendRow(row); });
@@ -215,6 +218,7 @@ function _createQuestionSheet(ss) {
   sheet.setColumnWidth(3, 280);
   sheet.setColumnWidth(4, 80);
   sheet.setColumnWidth(5, 220);
+  sheet.setColumnWidth(6, 60);
 
   Logger.log('✓ 訪視題庫 建立完成（' + questions.length + ' 題）');
 }

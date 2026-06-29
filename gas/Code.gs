@@ -103,7 +103,8 @@ function getQuestions() {
       type:     String(row[3]).trim(),
       options:  row[4]
         ? String(row[4]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
-        : []
+        : [],
+      required: row[5] === true || String(row[5]).toUpperCase() === 'TRUE'
     });
   }
 
@@ -226,10 +227,14 @@ function submitForm(record) {
     }
   }
 
-  // 組合列資料
+  // 組合列資料（訪視日期優先用前端填寫的日期，fallback 為當下時間）
+  var visitDate = record.visitDate
+    ? new Date(record.visitDate)
+    : new Date();
+
   var rowData = [
     id,
-    new Date(),
+    visitDate,
     record.submitter   || '',
     Array.isArray(record.teamMembers)
       ? record.teamMembers.join(',')

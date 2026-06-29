@@ -41,6 +41,16 @@
         </div>
       </div>
 
+      <!-- 訪視日期 -->
+      <div class="form-group">
+        <label class="form-label" for="visitDate">
+          📅 訪視日期 <span class="req">*</span>
+        </label>
+        <input type="date" class="form-input" id="visitDate"
+               aria-required="true"
+               oninput="updateProgress()">
+      </div>
+
       <!-- 案主姓名 -->
       <div class="form-group">
         <label class="form-label" for="clientName">
@@ -96,6 +106,13 @@
           <div class="section-subtitle">選擇一同出訪的夥伴（可複選，無則略過）</div>
         </div>
       </div>
+      <!-- 協同志工搜尋欄 -->
+      <div id="teammatesSearchWrap" class="hidden" style="margin-bottom:10px;">
+        <input type="text" class="form-input" id="teammatesSearch"
+               placeholder="🔍 輸入姓名快速篩選..."
+               autocomplete="off"
+               oninput="filterTeammates(this.value)">
+      </div>
       <div class="checkbox-group" id="teammatesContainer">
         <div style="display:flex;align-items:center;gap:12px;color:var(--text-muted);font-size:.875rem;">
           <div class="spinner" style="width:24px;height:24px;border-width:2px;"></div>
@@ -143,6 +160,13 @@
 
     document.getElementById('userInfo').textContent =
       `${session.name}｜${session.branch}`;
+
+    // 訪視日期預設今日
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm   = String(today.getMonth() + 1).padStart(2, '0');
+    const dd   = String(today.getDate()).padStart(2, '0');
+    document.getElementById('visitDate').value = `${yyyy}-${mm}-${dd}`;
 
     // 並行載入題庫 & 同分隊成員
     await Promise.all([
@@ -224,6 +248,11 @@
         container.appendChild(div);
       });
 
+      // 人數超過 5 人才顯示搜尋欄
+      if (others.length > 5) {
+        document.getElementById('teammatesSearchWrap').classList.remove('hidden');
+      }
+
     } catch (err) {
       container.innerHTML = `<p class="field-error">⚠️ 無法載入成員：${err.message}</p>`;
     }
@@ -235,6 +264,15 @@
     el.setAttribute('aria-checked', el.classList.contains('selected'));
   }
 
+  // ─── 協同志工搜尋過濾 ────────────────────────────────────────
+  function filterTeammates(query) {
+    const q = query.trim();
+    document.querySelectorAll('#teammatesContainer .checkbox-option').forEach(el => {
+      const name = el.dataset.name || '';
+      el.style.display = (!q || name.includes(q)) ? '' : 'none';
+    });
+  }
+
   // ─── 建立題目卡片 DOM ────────────────────────────────────────
   function buildQuestionCard(q, idx) {
     const card = document.createElement('div');
@@ -242,10 +280,15 @@
     card.id = `qcard-${q.id}`;
     card.style.animationDelay = `${idx * 60}ms`;
 
+    const reqBadge = q.required
+      ? `<span class="q-required">必填</span>`
+      : `<span class="q-optional">選填</span>`;
+
     card.innerHTML = `
       <div class="question-header">
         <span class="q-badge">${q.id}</span>
         <span class="q-category">${q.category}</span>
+        ${reqBadge}
         <span class="q-text">${q.content}</span>
       </div>
       <div class="question-body" id="qbody-${q.id}">
@@ -379,11 +422,18 @@
       Toast.success('GPS 定位成功！');
       updateProgress();
 
-      // 嘗試反向地理編碼（背景執行，不阻擋流程）
+      // 反向地理編碼 → 自動填入居住地址
       GPS.reverseGeocode(gpsData.lat, gpsData.lng).then(addr => {
         if (addr) {
           gpsData.address = addr;
-          coords.textContent = `📍 ${addr}\n（${gpsData.formatted}）`;
+          coords.textContent = `📍 ${addr}（${gpsData.formatted}）`;
+          // 若地址欄尚未填寫，自動帶入
+          const addrInput = document.getElementById('clientAddress');
+          if (!addrInput.value.trim()) {
+            addrInput.value = addr;
+            updateProgress();
+            Toast.info('已自動填入居住地址，請確認是否正確');
+          }
         }
       });
 
@@ -401,9 +451,10 @@
     const total = questions.length + 1; // +1 為「案家資料」
     let done = 0;
 
+    const date = document.getElementById('visitDate')?.value;
     const name = document.getElementById('clientName')?.value?.trim();
     const addr = document.getElementById('clientAddress')?.value?.trim();
-    if (name && addr) done++;
+    if (date && name && addr) done++;
 
     questions.forEach(q => {
       const ans = answers[q.id];
@@ -439,11 +490,17 @@
     const session = Session.get();
     if (!session) return;
 
+    const visitDate     = document.getElementById('visitDate').value;
     const clientName    = document.getElementById('clientName').value.trim();
     const clientPhone   = document.getElementById('clientPhone').value.trim();
     const clientAddress = document.getElementById('clientAddress').value.trim();
 
     // 驗證案家資料
+    if (!visitDate) {
+      Toast.warning('請選擇訪視日期');
+      document.getElementById('visitDate').focus();
+      return;
+    }
     if (!clientName) {
       Toast.warning('請填寫案主姓名');
       scrollToEl(document.getElementById('clientName'));
@@ -456,14 +513,15 @@
       return;
     }
 
-    // 驗證所有題目均已作答
+    // 驗證必填題均已作答
     const unanswered = questions.filter(q => {
+      if (!q.required) return false;
       const ans = answers[q.id];
       return Array.isArray(ans) ? ans.length === 0 : !ans || !String(ans).trim();
     });
 
     if (unanswered.length > 0) {
-      Toast.warning(`尚有 ${unanswered.length} 道題目未作答`);
+      Toast.warning(`尚有 ${unanswered.length} 道必填題目未作答`);
       scrollToEl(document.getElementById(`qcard-${unanswered[0].id}`));
       return;
     }
@@ -478,6 +536,7 @@
     FormStore.set({
       submitter:     session.name,
       branch:        session.branch,
+      visitDate,
       clientName,
       clientPhone,
       clientAddress,

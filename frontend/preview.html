@@ -157,6 +157,7 @@
   // ─── 渲染「案家基本資料」 ────────────────────────────────────
   function renderClient(data) {
     const items = [
+      { label: '訪視日期', value: data.visitDate || '<span style="color:var(--text-muted)">未填寫</span>' },
       { label: '案主姓名', value: data.clientName },
       { label: '聯絡電話', value: data.clientPhone || '<span style="color:var(--text-muted)">未填寫</span>' },
       { label: '居住地址', value: data.clientAddress },
