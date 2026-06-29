@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A8A">
+  <title>志工訪視系統 — 填寫表單</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ 頂部導覽列 ============ -->
+<div class="top-bar" role="banner">
+  <div class="top-bar-inner">
+    <div>
+      <div class="top-bar-title">🏠 居家訪視紀錄</div>
+      <div class="top-bar-subtitle" id="userInfo">載入中...</div>
+    </div>
+    <button class="back-btn" onclick="handleLogout()" aria-label="登出系統">
+      ← 登出
+    </button>
+  </div>
+  <!-- 進度條 -->
+  <div class="progress-bar" role="progressbar" aria-label="填寫進度"
+       aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- ============ 主要內容 ============ -->
+<div class="page-content" id="pageContent">
+
+  <!-- ── Section 1：案家基本資料 ── -->
+  <div class="card" id="sectionClient">
+    <div class="card-body">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">👤</div>
+        <div>
+          <div class="section-title">案家基本資料</div>
+          <div class="section-subtitle">請填寫受訪者的基本資訊</div>
+        </div>
+      </div>
+
+      <!-- 案主姓名 -->
+      <div class="form-group">
+        <label class="form-label" for="clientName">
+          案主姓名 <span class="req">*</span>
+        </label>
+        <input type="text" class="form-input" id="clientName"
+               placeholder="請輸入案主全名"
+               autocomplete="off"
+               oninput="updateProgress()">
+      </div>
+
+      <!-- 聯絡電話 -->
+      <div class="form-group">
+        <label class="form-label" for="clientPhone">聯絡電話</label>
+        <input type="tel" class="form-input" id="clientPhone"
+               placeholder="例：0912-345-678"
+               inputmode="tel">
+      </div>
+
+      <!-- 居住地址 -->
+      <div class="form-group">
+        <label class="form-label" for="clientAddress">
+          居住地址 <span class="req">*</span>
+        </label>
+        <input type="text" class="form-input" id="clientAddress"
+               placeholder="請輸入完整地址（縣市區鄉鎮路號）"
+               autocomplete="off"
+               oninput="updateProgress()">
+      </div>
+
+      <!-- GPS 定位 -->
+      <div class="form-group">
+        <label class="form-label">📍 GPS 座標定位</label>
+        <button class="gps-btn" id="gpsBtn" type="button" onclick="handleGPS()">
+          <span id="gpsBtnIcon">📡</span>
+          <span id="gpsBtnText">點擊自動定位目前位置</span>
+        </button>
+        <div class="gps-result hidden" id="gpsResult">
+          <span id="gpsCoordsText"></span>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /.card#sectionClient -->
+
+  <!-- ── Section 2：協同志工 ── -->
+  <div class="card mt-4" id="sectionTeam">
+    <div class="card-body">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">👥</div>
+        <div>
+          <div class="section-title">協同志工</div>
+          <div class="section-subtitle">選擇一同出訪的夥伴（可複選，無則略過）</div>
+        </div>
+      </div>
+      <div class="checkbox-group" id="teammatesContainer">
+        <div style="display:flex;align-items:center;gap:12px;color:var(--text-muted);font-size:.875rem;">
+          <div class="spinner" style="width:24px;height:24px;border-width:2px;"></div>
+          載入同分隊成員...
+        </div>
+      </div>
+    </div>
+  </div><!-- /.card#sectionTeam -->
+
+  <!-- ── Section 3：訪視題目（動態渲染）── -->
+  <div id="sectionQuestions">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;
+                padding:40px 0;color:var(--text-muted);">
+      <div class="spinner"></div>
+      <p>載入訪視題目中...</p>
+    </div>
+  </div>
+
+</div><!-- /.page-content -->
+
+<!-- ============ 底部操作列 ============ -->
+<div class="bottom-bar" role="contentinfo">
+  <div class="bottom-bar-inner" style="flex-direction:column;gap:8px;">
+    <div id="progressLabel" style="font-size:.8rem;color:var(--text-muted);text-align:center;">
+      <!-- 動態更新 -->
+    </div>
+    <button class="btn btn-primary btn-full btn-lg" id="nextBtn"
+            onclick="handleNext()" aria-label="前往預覽確認">
+      📋 下一步：預覽確認
+    </button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  // ─── 全域狀態 ───────────────────────────────────────────────
+  let questions = [];   // 題庫
+  let answers   = {};   // 使用者答案 { Q01: '是', Q04: ['餐食協助'] }
+  let gpsData   = null; // GPS 定位結果
+
+  // ─── 初始化 ─────────────────────────────────────────────────
+  async function init() {
+    const session = Session.require();
+    if (!session) return;
+
+    document.getElementById('userInfo').textContent =
+      `${session.name}｜${session.branch}`;
+
+    // 並行載入題庫 & 同分隊成員
+    await Promise.all([
+      loadQuestions(),
+      loadTeammates(session.branch, session.name),
+    ]);
+
+    updateProgress();
+  }
+
+  // ─── 載入訪視題庫 ───────────────────────────────────────────
+  async function loadQuestions() {
+    const container = document.getElementById('sectionQuestions');
+
+    try {
+      const res = await API.getQuestions();
+      if (!res.success) throw new Error(res.error);
+
+      questions = res.data || [];
+      container.innerHTML = '';
+
+      if (questions.length === 0) {
+        container.innerHTML = `
+          <div class="card mt-4">
+            <div class="card-body" style="text-align:center;color:var(--text-muted);">
+              <p>⚠️ 訪視題庫目前無題目，請聯絡管理員。</p>
+            </div>
+          </div>`;
+        return;
+      }
+
+      questions.forEach((q, idx) => {
+        const card = buildQuestionCard(q, idx);
+        container.appendChild(card);
+      });
+
+    } catch (err) {
+      container.innerHTML = `
+        <div class="card mt-4" style="border-left:4px solid var(--c-danger);">
+          <div class="card-body">
+            <p class="text-danger">⚠️ 無法載入訪視題目：${err.message}</p>
+            <button class="btn btn-secondary btn-sm mt-4" onclick="loadQuestions()">🔄 重新載入</button>
+          </div>
+        </div>`;
+    }
+  }
+
+  // ─── 載入協同志工名單 ───────────────────────────────────────
+  async function loadTeammates(branch, selfName) {
+    const container = document.getElementById('teammatesContainer');
+
+    try {
+      const res = await API.getMembersByBranch(branch);
+      if (!res.success) throw new Error(res.error);
+
+      const others = (res.data || []).filter(m => m.name !== selfName);
+
+      if (others.length === 0) {
+        container.innerHTML = `<p class="text-muted text-sm">本分隊目前無其他成員資料。</p>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      others.forEach(member => {
+        const div = document.createElement('div');
+        div.className = 'checkbox-option';
+        div.dataset.name = member.name;
+        div.setAttribute('role', 'checkbox');
+        div.setAttribute('aria-checked', 'false');
+        div.setAttribute('tabindex', '0');
+        div.innerHTML = `
+          <div class="check-indicator" aria-hidden="true"></div>
+          <span class="option-label">
+            ${member.name}
+            <small style="color:var(--text-muted);font-weight:400;"> (${member.role})</small>
+          </span>`;
+        div.addEventListener('click', () => toggleTeammate(div));
+        div.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTeammate(div); } });
+        container.appendChild(div);
+      });
+
+    } catch (err) {
+      container.innerHTML = `<p class="field-error">⚠️ 無法載入成員：${err.message}</p>`;
+    }
+  }
+
+  // ─── 勾選協同志工 ───────────────────────────────────────────
+  function toggleTeammate(el) {
+    el.classList.toggle('selected');
+    el.setAttribute('aria-checked', el.classList.contains('selected'));
+  }
+
+  // ─── 建立題目卡片 DOM ────────────────────────────────────────
+  function buildQuestionCard(q, idx) {
+    const card = document.createElement('div');
+    card.className = 'question-card anim-slide-up';
+    card.id = `qcard-${q.id}`;
+    card.style.animationDelay = `${idx * 60}ms`;
+
+    card.innerHTML = `
+      <div class="question-header">
+        <span class="q-badge">${q.id}</span>
+        <span class="q-category">${q.category}</span>
+        <span class="q-text">${q.content}</span>
+      </div>
+      <div class="question-body" id="qbody-${q.id}">
+        ${renderInput(q)}
+      </div>`;
+
+    return card;
+  }
+
+  // ─── 依題型渲染輸入元件 ─────────────────────────────────────
+  function renderInput(q) {
+    switch (q.type) {
+      case '是否題':
+      case '單選題':
+        return `
+          <div class="radio-group" id="rg-${q.id}" role="radiogroup" aria-label="${q.content}">
+            ${q.options.map(opt => `
+              <div class="radio-option"
+                   role="radio" aria-checked="false" tabindex="0"
+                   data-qid="${q.id}" data-val="${opt}"
+                   onclick="selectRadio(this)"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectRadio(this);}">
+                <div class="radio-indicator" aria-hidden="true"></div>
+                <span class="option-label">${opt}</span>
+              </div>`).join('')}
+          </div>`;
+
+      case '複選題':
+        return `
+          <div class="checkbox-group" id="cg-${q.id}">
+            ${q.options.map(opt => `
+              <div class="checkbox-option"
+                   role="checkbox" aria-checked="false" tabindex="0"
+                   data-qid="${q.id}" data-val="${opt}"
+                   onclick="toggleCheckAnswer(this)"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleCheckAnswer(this);}">
+                <div class="check-indicator" aria-hidden="true"></div>
+                <span class="option-label">${opt}</span>
+              </div>`).join('')}
+          </div>`;
+
+      case '簡答題':
+        return `
+          <textarea class="form-textarea"
+                    id="ta-${q.id}"
+                    placeholder="請輸入您的觀察與記錄..."
+                    rows="4"
+                    aria-label="${q.content}"
+                    oninput="handleTextAnswer('${q.id}', this.value)"></textarea>`;
+
+      default:
+        return `<p class="text-muted text-sm">⚠️ 不支援的題型：${q.type}</p>`;
+    }
+  }
+
+  // ─── 單選題：點選選項 ────────────────────────────────────────
+  function selectRadio(el) {
+    const qid = el.dataset.qid;
+    const val = el.dataset.val;
+
+    // 取消同組其他選項
+    document.querySelectorAll(`#rg-${qid} .radio-option`).forEach(o => {
+      o.classList.remove('selected');
+      o.setAttribute('aria-checked', 'false');
+    });
+
+    el.classList.add('selected');
+    el.setAttribute('aria-checked', 'true');
+    answers[qid] = val;
+
+    markAnswered(qid, true);
+    updateProgress();
+  }
+
+  // ─── 複選題：點選選項 ────────────────────────────────────────
+  function toggleCheckAnswer(el) {
+    const qid = el.dataset.qid;
+    const val = el.dataset.val;
+
+    el.classList.toggle('selected');
+    el.setAttribute('aria-checked', el.classList.contains('selected'));
+
+    if (!Array.isArray(answers[qid])) answers[qid] = [];
+
+    if (el.classList.contains('selected')) {
+      if (!answers[qid].includes(val)) answers[qid].push(val);
+    } else {
+      answers[qid] = answers[qid].filter(v => v !== val);
+    }
+
+    markAnswered(qid, answers[qid].length > 0);
+    updateProgress();
+  }
+
+  // ─── 簡答題：文字輸入 ────────────────────────────────────────
+  function handleTextAnswer(qid, val) {
+    answers[qid] = val;
+    markAnswered(qid, val.trim().length > 0);
+    updateProgress();
+  }
+
+  // ─── 標記題目卡片已/未作答 ──────────────────────────────────
+  function markAnswered(qid, isDone) {
+    const card = document.getElementById(`qcard-${qid}`);
+    if (card) card.classList.toggle('answered', isDone);
+  }
+
+  // ─── GPS 定位 ────────────────────────────────────────────────
+  async function handleGPS() {
+    const btn     = document.getElementById('gpsBtn');
+    const btnIcon = document.getElementById('gpsBtnIcon');
+    const btnText = document.getElementById('gpsBtnText');
+    const result  = document.getElementById('gpsResult');
+    const coords  = document.getElementById('gpsCoordsText');
+
+    btn.disabled = true;
+    btnIcon.textContent = '⏳';
+    btnText.textContent = '定位中，請稍候...';
+
+    try {
+      gpsData = await GPS.getPosition();
+
+      // 成功
+      btn.classList.add('active');
+      btn.disabled = false;
+      btnIcon.textContent = '✅';
+      btnText.textContent = '定位成功！點擊可重新定位';
+
+      coords.textContent = `📍 ${gpsData.formatted}（精確度約 ${gpsData.accuracy} 公尺）`;
+      result.classList.remove('hidden');
+      Toast.success('GPS 定位成功！');
+      updateProgress();
+
+      // 嘗試反向地理編碼（背景執行，不阻擋流程）
+      GPS.reverseGeocode(gpsData.lat, gpsData.lng).then(addr => {
+        if (addr) {
+          gpsData.address = addr;
+          coords.textContent = `📍 ${addr}\n（${gpsData.formatted}）`;
+        }
+      });
+
+    } catch (err) {
+      btn.disabled = false;
+      btnIcon.textContent = '📡';
+      btnText.textContent = '定位失敗，點擊重試';
+      btn.classList.remove('active');
+      Toast.error(err.message);
+    }
+  }
+
+  // ─── 更新進度條 ──────────────────────────────────────────────
+  function updateProgress() {
+    const total = questions.length + 1; // +1 為「案家資料」
+    let done = 0;
+
+    const name = document.getElementById('clientName')?.value?.trim();
+    const addr = document.getElementById('clientAddress')?.value?.trim();
+    if (name && addr) done++;
+
+    questions.forEach(q => {
+      const ans = answers[q.id];
+      if (Array.isArray(ans) ? ans.length > 0 : ans && String(ans).trim()) done++;
+    });
+
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const fill = document.getElementById('progressFill');
+    if (fill) {
+      fill.style.width = pct + '%';
+      fill.parentElement.setAttribute('aria-valuenow', pct);
+    }
+
+    const label = document.getElementById('progressLabel');
+    if (label) {
+      label.textContent = pct < 100
+        ? `已完成 ${done} / ${total} 項（${pct}%）`
+        : '✅ 所有欄位已填寫完畢';
+    }
+  }
+
+  // ─── 登出 ────────────────────────────────────────────────────
+  function handleLogout() {
+    if (confirm('確定要登出嗎？\n目前填寫中的資料將會遺失。')) {
+      Session.clear();
+      FormStore.clear();
+      window.location.href = 'index.html';
+    }
+  }
+
+  // ─── 下一步：驗證並前往預覽 ─────────────────────────────────
+  function handleNext() {
+    const session = Session.get();
+    if (!session) return;
+
+    const clientName    = document.getElementById('clientName').value.trim();
+    const clientPhone   = document.getElementById('clientPhone').value.trim();
+    const clientAddress = document.getElementById('clientAddress').value.trim();
+
+    // 驗證案家資料
+    if (!clientName) {
+      Toast.warning('請填寫案主姓名');
+      scrollToEl(document.getElementById('clientName'));
+      document.getElementById('clientName').focus();
+      return;
+    }
+    if (!clientAddress) {
+      Toast.warning('請填寫案主地址');
+      document.getElementById('clientAddress').focus();
+      return;
+    }
+
+    // 驗證所有題目均已作答
+    const unanswered = questions.filter(q => {
+      const ans = answers[q.id];
+      return Array.isArray(ans) ? ans.length === 0 : !ans || !String(ans).trim();
+    });
+
+    if (unanswered.length > 0) {
+      Toast.warning(`尚有 ${unanswered.length} 道題目未作答`);
+      scrollToEl(document.getElementById(`qcard-${unanswered[0].id}`));
+      return;
+    }
+
+    // 收集協同志工
+    const teamMembers = [];
+    document.querySelectorAll('#teammatesContainer .checkbox-option.selected').forEach(el => {
+      teamMembers.push(el.dataset.name);
+    });
+
+    // 存至 FormStore
+    FormStore.set({
+      submitter:     session.name,
+      branch:        session.branch,
+      clientName,
+      clientPhone,
+      clientAddress,
+      gps:       gpsData ? gpsData.formatted : '',
+      gpsAddress: gpsData?.address || '',
+      teamMembers,
+      answers: { ...answers },
+      // 保存題目 metadata 供預覽頁使用
+      questions: questions.map(q => ({
+        id:      q.id,
+        content: q.content,
+        type:    q.type,
+      })),
+      timestamp: new Date().toISOString(),
+    });
+
+    window.location.href = 'preview.html';
+  }
+
+  // ─── 掛載 ────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: volunteer-visit-app
+    env: static
+    staticPublishPath: ./frontend
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

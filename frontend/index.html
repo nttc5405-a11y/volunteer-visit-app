@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A8A">
+  <meta name="description" content="社區志工居家訪視電子化填報系統，安全簡便的行動端平台。">
+  <title>志工訪視系統 — 登入</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ======================== 登入頁面 ======================== -->
+<main class="login-page">
+
+  <div class="login-card">
+
+    <!-- Hero 區塊 -->
+    <div class="login-hero">
+      <div class="login-logo" aria-hidden="true">🏠</div>
+      <h1 class="login-title">志工訪視系統</h1>
+      <p class="login-subtitle">社區居家訪視電子化平台</p>
+    </div>
+
+    <!-- 登入表單 -->
+    <div class="login-form">
+
+      <!-- 姓名下拉 -->
+      <div class="form-group">
+        <label class="form-label" for="nameSelect">
+          👤 選擇您的姓名 <span class="req">*</span>
+        </label>
+        <select class="form-select" id="nameSelect" aria-required="true">
+          <option value="">— 載入人員名單中... —</option>
+        </select>
+      </div>
+
+      <!-- 手機末三碼 -->
+      <div class="form-group">
+        <label class="form-label" for="phoneInput">
+          📱 手機末三碼驗證 <span class="req">*</span>
+        </label>
+        <input
+          type="tel"
+          class="form-input"
+          id="phoneInput"
+          maxlength="3"
+          pattern="[0-9]{3}"
+          placeholder="請輸入手機號碼末 3 碼"
+          inputmode="numeric"
+          autocomplete="off"
+          aria-required="true"
+        >
+        <!-- 錯誤訊息 -->
+        <div class="field-error hidden" id="loginError" role="alert" aria-live="polite">
+          ⚠️ <span id="loginErrorText"></span>
+        </div>
+      </div>
+
+      <!-- 登入按鈕 -->
+      <button
+        class="btn btn-primary btn-full btn-lg"
+        id="loginBtn"
+        onclick="handleLogin()"
+        aria-label="進入填寫系統"
+      >
+        <span id="loginBtnIcon">🔓</span>
+        <span id="loginBtnText">進入填寫系統</span>
+      </button>
+
+    </div><!-- /.login-form -->
+
+    <!-- 狀態列 -->
+    <div class="login-footer">
+      <span class="status-dot online" aria-hidden="true"></span>
+      系統正常運行中 &nbsp;·&nbsp; 填寫時請保持網路連線
+    </div>
+
+  </div><!-- /.login-card -->
+
+  <p style="margin-top:20px;color:rgba(255,255,255,.4);font-size:.75rem;">
+    志工訪視系統 v1.0
+  </p>
+
+</main>
+
+<script src="app.js"></script>
+<script>
+  // ─── 頁面初始化 ───────────────────────────────────────────
+  async function init() {
+    // 若已登入，直接跳轉表單頁
+    if (Session.get()) {
+      window.location.href = 'form.html';
+      return;
+    }
+    await loadMembers();
+  }
+
+  // ─── 載入人員名單 ─────────────────────────────────────────
+  async function loadMembers() {
+    const select = document.getElementById('nameSelect');
+    select.innerHTML = '<option value="">— 載入中... —</option>';
+    select.disabled = true;
+
+    try {
+      const res = await API.getAllMembers();
+      if (!res.success) throw new Error(res.error);
+
+      const members = res.data || [];
+
+      // 依分隊分組
+      const groups = {};
+      members.forEach(m => {
+        if (!groups[m.branch]) groups[m.branch] = [];
+        groups[m.branch].push(m);
+      });
+
+      select.innerHTML = '<option value="">— 請選擇您的姓名 —</option>';
+
+      Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'zh-TW')).forEach(([branch, list]) => {
+        const og = document.createElement('optgroup');
+        og.label = branch;
+        list
+          .sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
+          .forEach(m => {
+            const opt = document.createElement('option');
+            opt.value        = m.name;
+            opt.dataset.branch = m.branch;
+            opt.dataset.role   = m.role;
+            opt.textContent  = m.role !== '志工'
+              ? `${m.name}（${m.role}）`
+              : m.name;
+            og.appendChild(opt);
+          });
+        select.appendChild(og);
+      });
+
+      select.disabled = false;
+
+    } catch (err) {
+      select.innerHTML = `<option value="">⚠️ 載入失敗，請重新整理</option>`;
+      Toast.error('無法載入人員名單：' + err.message);
+    }
+  }
+
+  // ─── 登入處理 ─────────────────────────────────────────────
+  async function handleLogin() {
+    const nameSelect     = document.getElementById('nameSelect');
+    const phoneInput     = document.getElementById('phoneInput');
+    const loginBtn       = document.getElementById('loginBtn');
+    const loginError     = document.getElementById('loginError');
+    const loginErrorText = document.getElementById('loginErrorText');
+
+    const name  = nameSelect.value.trim();
+    const phone = phoneInput.value.trim();
+
+    // 隱藏舊錯誤
+    loginError.classList.add('hidden');
+    phoneInput.style.borderColor = '';
+    nameSelect.style.borderColor = '';
+
+    // 驗證
+    if (!name) {
+      _showError('請選擇您的姓名');
+      nameSelect.style.borderColor = 'var(--c-danger)';
+      nameSelect.focus();
+      return;
+    }
+    if (!/^\d{3}$/.test(phone)) {
+      _showError('手機末三碼須為 3 位數字，請重新輸入');
+      phoneInput.style.borderColor = 'var(--c-danger)';
+      phoneInput.focus();
+      return;
+    }
+
+    // 送出驗證
+    loginBtn.disabled = true;
+    document.getElementById('loginBtnIcon').textContent = '⏳';
+    document.getElementById('loginBtnText').textContent = '驗證中...';
+
+    try {
+      const res = await API.verifyLogin(name, phone);
+
+      if (res.success) {
+        Session.set({ ...res.user, loginTime: new Date().toISOString() });
+        Toast.success(`歡迎，${res.user.name}！`);
+
+        // 短暫停頓後跳轉
+        document.getElementById('loginBtnIcon').textContent = '✅';
+        document.getElementById('loginBtnText').textContent = '驗證成功，正在進入...';
+
+        setTimeout(() => { window.location.href = 'form.html'; }, 700);
+
+      } else {
+        _showError(res.error || '驗證失敗，請確認姓名與手機末三碼');
+        _resetBtn();
+      }
+
+    } catch (err) {
+      _showError('連線失敗：' + err.message + '（請確認網路）');
+      _resetBtn();
+    }
+
+    function _showError(msg) {
+      loginErrorText.textContent = msg;
+      loginError.classList.remove('hidden');
+      phoneInput.style.borderColor = 'var(--c-danger)';
+      setTimeout(() => phoneInput.style.borderColor = '', 3000);
+    }
+
+    function _resetBtn() {
+      loginBtn.disabled = false;
+      document.getElementById('loginBtnIcon').textContent = '🔓';
+      document.getElementById('loginBtnText').textContent = '進入填寫系統';
+    }
+  }
+
+  // ─── 初始掛載 ─────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    // Enter 鍵觸發登入
+    document.getElementById('phoneInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleLogin();
+    });
+
+    init();
+  });
+</script>
+</body>
+</html>

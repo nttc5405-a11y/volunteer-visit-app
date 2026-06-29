@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A8A">
+  <title>志工訪視系統 — 預覽確認</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ 頂部導覽列 ============ -->
+<div class="top-bar" role="banner">
+  <div class="top-bar-inner">
+    <div>
+      <div class="top-bar-title">📋 預覽確認</div>
+      <div class="top-bar-subtitle">請核對資料後送出</div>
+    </div>
+    <button class="back-btn" onclick="window.history.back()" aria-label="返回修改">
+      ← 返回修改
+    </button>
+  </div>
+  <!-- 進度條固定 100% -->
+  <div class="progress-bar" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+    <div class="progress-fill" style="width:100%"></div>
+  </div>
+</div>
+
+<!-- ============ 主要內容 ============ -->
+<div class="page-content">
+
+  <!-- 提醒框 -->
+  <div style="
+    background:#FFFBEB; border:1px solid #FCD34D;
+    border-radius:var(--r-md); padding:14px 18px;
+    margin-bottom:var(--sp-4);
+    display:flex; gap:10px; align-items:flex-start;"
+    role="alert">
+    <span aria-hidden="true" style="font-size:1.25rem;">⚠️</span>
+    <p style="font-size:.85rem; color:#92400E; font-weight:500; line-height:1.5;">
+      請仔細核對以下資料。<strong>送出後將無法修改</strong>，如有錯誤請點擊右上角「返回修改」。
+    </p>
+  </div>
+
+  <!-- ── 填寫人資訊 ── -->
+  <div class="card" id="cardSubmitter">
+    <div class="card-body">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">📝</div>
+        <div><div class="section-title">填寫人資訊</div></div>
+      </div>
+      <div id="submitterSection"></div>
+    </div>
+  </div>
+
+  <!-- ── 案家基本資料 ── -->
+  <div class="card mt-4" id="cardClient">
+    <div class="card-body">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">👤</div>
+        <div><div class="section-title">案家基本資料</div></div>
+      </div>
+      <div id="clientSection"></div>
+    </div>
+  </div>
+
+  <!-- ── 訪視題目答題 ── -->
+  <div class="card mt-4" id="cardAnswers">
+    <div class="card-body">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">📋</div>
+        <div><div class="section-title">訪視答題內容</div></div>
+      </div>
+      <div id="answersSection"></div>
+    </div>
+  </div>
+
+</div><!-- /.page-content -->
+
+<!-- ============ 底部操作列 ============ -->
+<div class="bottom-bar">
+  <div class="bottom-bar-inner">
+    <button class="btn btn-secondary" style="flex:0 0 auto;min-width:100px;"
+            onclick="window.history.back()" aria-label="返回修改">
+      ← 修改
+    </button>
+    <button class="btn btn-success btn-full btn-lg" id="submitBtn"
+            onclick="handleSubmit()" aria-label="確認送出訪視紀錄">
+      ✅ 確認送出
+    </button>
+  </div>
+</div>
+
+<!-- ============ 送出成功 Modal ============ -->
+<div id="successModal" class="success-modal hidden" role="dialog" aria-modal="true"
+     aria-labelledby="successTitle">
+  <div class="success-modal-card">
+    <div style="font-size:4rem;margin-bottom:var(--sp-4);" aria-hidden="true">🎉</div>
+    <h2 id="successTitle"
+        style="font-size:1.5rem;font-weight:800;color:var(--c-success);margin-bottom:var(--sp-2);">
+      送出成功！
+    </h2>
+    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:var(--sp-5);">
+      訪視紀錄已成功儲存。感謝您的辛勤服務！
+    </p>
+    <div id="successMeta"
+         style="background:var(--c-success-bg);border-radius:var(--r-sm);
+                padding:12px;font-size:.875rem;color:#065F46;
+                margin-bottom:var(--sp-6);font-weight:600;">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="handleNewRecord()" aria-label="繼續填寫下一戶">
+      ➕ 繼續填寫下一戶
+    </button>
+    <button class="btn btn-secondary btn-full mt-4" onclick="handleLogout()" aria-label="登出系統">
+      → 登出系統
+    </button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  // ─── 初始化：渲染所有預覽區塊 ──────────────────────────────
+  function init() {
+    const session = Session.require();
+    if (!session) return;
+
+    const data = FormStore.get();
+    if (!data || !data.clientName) {
+      Toast.error('找不到表單資料，請重新填寫');
+      setTimeout(() => { window.location.href = 'form.html'; }, 2000);
+      return;
+    }
+
+    renderSubmitter(session, data);
+    renderClient(data);
+    renderAnswers(data);
+  }
+
+  // ─── 渲染「填寫人資訊」 ──────────────────────────────────────
+  function renderSubmitter(session, data) {
+    const items = [
+      { label: '主填寫人', value: session.name },
+      { label: '所屬分隊', value: session.branch },
+      {
+        label: '協同志工',
+        value: (data.teamMembers && data.teamMembers.length > 0)
+          ? data.teamMembers.map(m => `<span class="preview-tag">${m}</span>`).join('')
+          : '<span style="color:var(--text-muted)">本次獨立出訪</span>',
+      },
+      { label: '填寫時間', value: formatDateTime(new Date(data.timestamp)) },
+    ];
+
+    document.getElementById('submitterSection').innerHTML =
+      items.map(previewItem).join('');
+  }
+
+  // ─── 渲染「案家基本資料」 ────────────────────────────────────
+  function renderClient(data) {
+    const items = [
+      { label: '案主姓名', value: data.clientName },
+      { label: '聯絡電話', value: data.clientPhone || '<span style="color:var(--text-muted)">未填寫</span>' },
+      { label: '居住地址', value: data.clientAddress },
+      { label: 'GPS 座標',  value: data.gps
+          ? `<span style="font-size:.8rem;font-family:monospace;">${data.gps}</span>`
+          : '<span style="color:var(--text-muted)">未定位</span>' },
+    ];
+
+    document.getElementById('clientSection').innerHTML =
+      items.map(previewItem).join('');
+  }
+
+  // ─── 渲染「訪視答題內容」 ────────────────────────────────────
+  function renderAnswers(data) {
+    const questions = data.questions || [];
+    const answers   = data.answers   || {};
+    const container = document.getElementById('answersSection');
+
+    if (questions.length === 0) {
+      container.innerHTML = '<p class="text-muted text-sm">無訪視題目</p>';
+      return;
+    }
+
+    container.innerHTML = questions.map(q => {
+      const ans = answers[q.id];
+      let displayValue = '';
+
+      if (Array.isArray(ans) && ans.length > 0) {
+        displayValue = ans.map(a => `<span class="preview-tag">${a}</span>`).join('');
+      } else if (ans && String(ans).trim()) {
+        displayValue = `<span class="answer-value">${escHtml(String(ans))}</span>`;
+      } else {
+        displayValue = `<span style="color:var(--c-danger)">⚠️ 未作答</span>`;
+      }
+
+      return `
+        <div class="answer-row">
+          <span class="answer-qid">${q.id}</span>
+          <div class="answer-content">
+            <div class="answer-q-text">${escHtml(q.content)}</div>
+            <div>${displayValue}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ─── 預覽列 template ─────────────────────────────────────────
+  function previewItem({ label, value }) {
+    return `
+      <div class="preview-item">
+        <span class="preview-label">${label}</span>
+        <span class="preview-value">${value}</span>
+      </div>`;
+  }
+
+  // ─── 送出表單 ────────────────────────────────────────────────
+  async function handleSubmit() {
+    const session = Session.get();
+    if (!session) return;
+
+    const data    = FormStore.get();
+    const btn     = document.getElementById('submitBtn');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span style="animation:spin .75s linear infinite;display:inline-block;">⏳</span> &nbsp;送出中，請勿關閉頁面...';
+
+    try {
+      const record = {
+        submitter:     data.submitter,
+        branch:        data.branch,
+        clientName:    data.clientName,
+        clientPhone:   data.clientPhone   || '',
+        clientAddress: data.clientAddress || '',
+        gps:           data.gps           || '',
+        teamMembers:   data.teamMembers   || [],
+        answers:       data.answers       || {},
+      };
+
+      const res = await API.submitForm(record);
+
+      if (res.success) {
+        FormStore.clear();
+        document.getElementById('successMeta').textContent =
+          `紀錄編號：#${res.id}  ｜  ${formatDateTime()}`;
+        document.getElementById('successModal').classList.remove('hidden');
+      } else {
+        Toast.error('送出失敗：' + (res.error || '未知錯誤'));
+        _resetBtn();
+      }
+
+    } catch (err) {
+      Toast.error('網路連線失敗，請稍後重試：' + err.message);
+      _resetBtn();
+    }
+
+    function _resetBtn() {
+      btn.disabled = false;
+      btn.innerHTML = '✅ 確認送出';
+    }
+  }
+
+  // ─── 成功後繼續填下一戶 ──────────────────────────────────────
+  function handleNewRecord() {
+    document.getElementById('successModal').classList.add('hidden');
+    window.location.href = 'form.html';
+  }
+
+  // ─── 登出 ────────────────────────────────────────────────────
+  function handleLogout() {
+    Session.clear();
+    FormStore.clear();
+    window.location.href = 'index.html';
+  }
+
+  // ─── 工具：HTML 跳脫（防 XSS） ──────────────────────────────
+  function escHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ─── 掛載 ────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
