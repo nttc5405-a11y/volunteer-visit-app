@@ -12,7 +12,7 @@
 // ============================================================
 const CONFIG = {
   // ↓↓↓ 部署 GAS 後，將 Web App 網址貼入此處 ↓↓↓
-  GAS_API_URL: 'YOUR_GAS_WEB_APP_URL_HERE',
+  GAS_API_URL: 'https://script.google.com/macros/s/AKfycbyq7qvcLI7GbsXnRjZOY-3i0RbZHeibURHer9Mkws45hl15qqdc5pq1ja1n64JN3lRh8Q/exec',
   // ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 
   SESSION_KEY: 'vas_session',
