@@ -45,10 +45,27 @@
         </select>
       </div>
 
+      <!-- 身分證字號末三碼 -->
+      <div class="form-group">
+        <label class="form-label" for="idCardInput">
+          🪪 身分證字號末三碼 <span class="req">*</span>
+        </label>
+        <input
+          type="text"
+          class="form-input"
+          id="idCardInput"
+          maxlength="3"
+          placeholder="請輸入身分證字號末 3 碼（例：182）"
+          autocomplete="off"
+          aria-required="true"
+          style="text-transform: uppercase;"
+        >
+      </div>
+
       <!-- 手機末三碼 -->
       <div class="form-group">
         <label class="form-label" for="phoneInput">
-          📱 手機末三碼驗證 <span class="req">*</span>
+          📱 手機號碼末三碼 <span class="req">*</span>
         </label>
         <input
           type="tel"
@@ -169,37 +186,38 @@
   async function handleLogin() {
     const branchSelect   = document.getElementById('branchSelect');
     const nameSelect     = document.getElementById('nameSelect');
+    const idCardInput    = document.getElementById('idCardInput');
     const phoneInput     = document.getElementById('phoneInput');
     const loginBtn       = document.getElementById('loginBtn');
     const loginError     = document.getElementById('loginError');
     const loginErrorText = document.getElementById('loginErrorText');
 
-    const name  = nameSelect.value.trim();
-    const phone = phoneInput.value.trim();
+    const name   = nameSelect.value.trim();
+    const idCard = idCardInput.value.trim().toUpperCase();
+    const phone  = phoneInput.value.trim();
 
     // 隱藏舊錯誤
     loginError.classList.add('hidden');
     phoneInput.style.borderColor = '';
+    idCardInput.style.borderColor = '';
     nameSelect.style.borderColor = '';
     branchSelect.style.borderColor = '';
 
     // 驗證
     if (!branchSelect.value) {
-      _showError('請選擇您的分隊');
-      branchSelect.style.borderColor = 'var(--c-danger)';
-      branchSelect.focus();
+      _showError('請選擇您的分隊', branchSelect);
       return;
     }
     if (!name) {
-      _showError('請選擇您的姓名');
-      nameSelect.style.borderColor = 'var(--c-danger)';
-      nameSelect.focus();
+      _showError('請選擇您的姓名', nameSelect);
+      return;
+    }
+    if (idCard.length !== 3) {
+      _showError('請輸入身分證字號末 3 碼', idCardInput);
       return;
     }
     if (!/^\d{3}$/.test(phone)) {
-      _showError('手機末三碼須為 3 位數字，請重新輸入');
-      phoneInput.style.borderColor = 'var(--c-danger)';
-      phoneInput.focus();
+      _showError('手機末三碼須為 3 位數字', phoneInput);
       return;
     }
 
@@ -209,7 +227,7 @@
     document.getElementById('loginBtnText').textContent = '驗證中...';
 
     try {
-      const res = await API.verifyLogin(name, phone);
+      const res = await API.verifyLogin(name, idCard, phone);
 
       if (res.success) {
         Session.set({ ...res.user, loginTime: new Date().toISOString() });
@@ -222,7 +240,7 @@
         setTimeout(() => { window.location.href = 'form.html'; }, 700);
 
       } else {
-        _showError(res.error || '驗證失敗，請確認姓名與手機末三碼');
+        _showError(res.error || '驗證失敗，請確認資料是否正確');
         _resetBtn();
       }
 
@@ -231,11 +249,14 @@
       _resetBtn();
     }
 
-    function _showError(msg) {
+    function _showError(msg, focusEl) {
       loginErrorText.textContent = msg;
       loginError.classList.remove('hidden');
-      phoneInput.style.borderColor = 'var(--c-danger)';
-      setTimeout(() => phoneInput.style.borderColor = '', 3000);
+      if (focusEl) {
+        focusEl.style.borderColor = 'var(--c-danger)';
+        focusEl.focus();
+        setTimeout(() => focusEl.style.borderColor = '', 3000);
+      }
     }
 
     function _resetBtn() {
@@ -248,9 +269,11 @@
   // ─── 初始掛載 ─────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     // Enter 鍵觸發登入
-    document.getElementById('phoneInput').addEventListener('keydown', (e) => {
+    const submitOnEnter = (e) => {
       if (e.key === 'Enter') handleLogin();
-    });
+    };
+    document.getElementById('phoneInput').addEventListener('keydown', submitOnEnter);
+    document.getElementById('idCardInput').addEventListener('keydown', submitOnEnter);
 
     init();
   });

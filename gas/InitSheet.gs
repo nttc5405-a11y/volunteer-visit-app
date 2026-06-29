@@ -90,7 +90,7 @@ function _createVisitRecordSheet(ss) {
 }
 
 // ============================================================
-// 建立「人員帳號管理」（含範例人員）
+// 建立「人員帳號管理」（含範例人員，欄位與 Excel 完全一致）
 // ============================================================
 function _createMemberSheet(ss) {
   var sheet = ss.getSheetByName('人員帳號管理');
@@ -101,36 +101,39 @@ function _createMemberSheet(ss) {
     sheet.clearFormats();
   }
 
-  var headers = ['人員姓名', '所屬分隊', '手機號碼', '權限角色'];
+  var headers = ['所屬大隊', '所屬單位', '職稱', '姓名', '身分證字號', '手機', '權限角色'];
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
   sheet.setFrozenRows(1);
 
-  // 範例人員資料（3 分隊 × 各2志工 + 1管理員）
+  // 範例人員資料（所屬大隊, 所屬單位, 職稱, 姓名, 身分證字號, 手機, 權限角色）
   var members = [
-    // 第一分隊
-    ['張小明', '第一分隊', '0912345678', '分隊承辦人'],
-    ['李美玲', '第一分隊', '0923456789', '志工'],
-    ['陳建宏', '第一分隊', '0934567890', '志工'],
-    // 第二分隊
-    ['王淑芬', '第二分隊', '0945678901', '分隊承辦人'],
-    ['林志偉', '第二分隊', '0956789012', '志工'],
-    ['黃雅婷', '第二分隊', '0967890123', '志工'],
-    // 第三分隊
-    ['吳家豪', '第三分隊', '0978901234', '分隊承辦人'],
-    ['蔡佩君', '第三分隊', '0989012345', '志工'],
-    ['許文哲', '第三分隊', '0990123456', '志工'],
+    // 臺東防宣
+    ['台東大隊', '臺東防宣', '分隊長', '張小明', 'V123456789', '0912-345678', '分隊承辦人'],
+    ['台東大隊', '臺東防宣', '隊員', '李美玲', 'V220031182', '0987-838406', '志工'],
+    ['台東大隊', '臺東防宣', '隊員', '陳建宏', 'V220430658', '0928-787898', '志工'],
+    // 關山防宣
+    ['台東大隊', '關山防宣', '分隊長', '王淑芬', 'Q123456789', '0945-678901', '分隊承辦人'],
+    ['台東大隊', '關山防宣', '隊員', '林志偉', 'Q220668764', '0988-231281', '志工'],
+    ['台東大隊', '關山防宣', '隊員', '黃雅婷', 'N221225092', '0911-227392', '志工'],
+    // 成功防宣
+    ['台東大隊', '成功防宣', '分隊長', '吳家豪', 'P123456789', '0978-901234', '分隊承辦人'],
+    ['台東大隊', '成功防宣', '隊員', '蔡佩君', 'V221171201', '0937-168008', '志工'],
+    ['台東大隊', '成功防宣', '隊員', '許文哲', 'N224758810', '0912-151341', '志工'],
     // 管理員
-    ['系統管理員', '（管理員）', '0900000000', '管理員']
+    ['台東大隊', '（管理員）', '系統管理員', '系統管理員', 'A123456789', '0900-000000', '管理員']
   ];
 
   members.forEach(function(row) { sheet.appendRow(row); });
 
   // 設定欄寬
-  sheet.setColumnWidth(1, 100);
-  sheet.setColumnWidth(2, 100);
-  sheet.setColumnWidth(3, 130);
-  sheet.setColumnWidth(4, 100);
+  sheet.setColumnWidth(1, 100); // 所屬大隊
+  sheet.setColumnWidth(2, 100); // 所屬單位
+  sheet.setColumnWidth(3, 100); // 職稱
+  sheet.setColumnWidth(4, 100); // 姓名
+  sheet.setColumnWidth(5, 120); // 身分證字號
+  sheet.setColumnWidth(6, 120); // 手機
+  sheet.setColumnWidth(7, 100); // 權限角色
 
   Logger.log('✓ 人員帳號管理 建立完成（' + members.length + ' 筆）');
 }
@@ -154,9 +157,9 @@ function _createBranchSheet(ss) {
 
   // 範例分隊（試算表ID 待建立後填入）
   var branches = [
-    ['第一分隊', 'branch1-manager@example.com', ''],
-    ['第二分隊', 'branch2-manager@example.com', ''],
-    ['第三分隊', 'branch3-manager@example.com', '']
+    ['臺東防宣', 'taitung-manager@example.com', ''],
+    ['關山防宣', 'guanshan-manager@example.com', ''],
+    ['成功防宣', 'chenggong-manager@example.com', '']
   ];
 
   branches.forEach(function(row) { sheet.appendRow(row); });
@@ -168,7 +171,7 @@ function _createBranchSheet(ss) {
     '若留空，則不進行自動同步。'
   );
 
-  sheet.setColumnWidth(1, 100);
+  sheet.setColumnWidth(1, 120);
   sheet.setColumnWidth(2, 220);
   sheet.setColumnWidth(3, 250);
 

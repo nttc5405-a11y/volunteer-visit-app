@@ -37,7 +37,7 @@ function doGet(e) {
         result = getBranches();
         break;
       case 'verifyLogin':
-        result = verifyLogin(params.name, params.phone);
+        result = verifyLogin(params.name, params.idCard, params.phone);
         break;
       default:
         result = { success: false, error: '未知的 action: ' + action };
@@ -112,22 +112,59 @@ function getQuestions() {
 }
 
 // ============================================================
-// 取得所有人員（不回傳手機號碼，保護隱私）
+// 輔助函式：動態取得「人員帳號管理」各欄位的欄位索引 (0-based)
+// ============================================================
+function getColumnIndexes(sheet) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var indexes = {
+    name: -1,
+    branch: -1,
+    phone: -1,
+    role: -1,
+    idCard: -1
+  };
+  
+  for (var i = 0; i < headers.length; i++) {
+    var header = String(headers[i]).trim();
+    if (header.indexOf('姓名') !== -1) {
+      indexes.name = i;
+    } else if (header.indexOf('單位') !== -1 || header.indexOf('分隊') !== -1) {
+      indexes.branch = i;
+    } else if (header.indexOf('手機') !== -1 || header.indexOf('電話') !== -1) {
+      indexes.phone = i;
+    } else if (header.indexOf('角色') !== -1 || header.indexOf('權限') !== -1) {
+      indexes.role = i;
+    } else if (header.indexOf('身分證') !== -1 || header.indexOf('身份證') !== -1) {
+      indexes.idCard = i;
+    }
+  }
+  return indexes;
+}
+
+// ============================================================
+// 取得所有人員（不回傳手機號碼與身分證字號，保護隱私）
 // ============================================================
 function getAllMembers() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('人員帳號管理');
   if (!sheet) return { success: false, error: '找不到「人員帳號管理」工作表。' };
 
   var data = sheet.getDataRange().getValues();
-  var members = [];
+  var idx = getColumnIndexes(sheet);
 
+  if (idx.name === -1) {
+    return { success: false, error: '人員工作表缺少「姓名」欄位' };
+  }
+
+  var members = [];
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (!row[0]) continue;
+    var name = String(row[idx.name]).trim();
+    if (!name) continue;
+
     members.push({
-      name:   String(row[0]).trim(),
-      branch: String(row[1]).trim(),
-      role:   String(row[3]).trim()
+      name:   name,
+      branch: idx.branch !== -1 ? String(row[idx.branch]).trim() : '無分隊',
+      role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工'
     });
   }
 
@@ -171,37 +208,51 @@ function getBranches() {
 }
 
 // ============================================================
-// 登入驗證：比對姓名 + 手機末三碼
+// 登入驗證：比對姓名 + 身分證字號後三碼 + 手機末三碼
 // ============================================================
-function verifyLogin(name, phoneLast3) {
-  if (!name || !phoneLast3) {
-    return { success: false, error: '請填寫姓名與手機末三碼' };
+function verifyLogin(name, idCardLast3, phoneLast3) {
+  if (!name || !idCardLast3 || !phoneLast3) {
+    return { success: false, error: '請填寫姓名、身分證末三碼與手機末三碼' };
   }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('人員帳號管理');
-  if (!sheet) return { success: false, error: '系統錯誤：找不到人員資料' };
+  if (!sheet) return { success: false, error: '系統錯誤：找不到人員資料工作表' };
 
   var data = sheet.getDataRange().getValues();
+  var idx = getColumnIndexes(sheet);
+
+  if (idx.name === -1 || idx.phone === -1 || idx.idCard === -1) {
+    return { success: false, error: '系統錯誤：人員工作表缺少必要欄位（姓名、手機或身分證字號）' };
+  }
 
   for (var i = 1; i < data.length; i++) {
-    var row        = data[i];
-    var memberName = String(row[0]).trim();
-    var memberPhone = String(row[2]).trim().replace(/\D/g, ''); // 移除非數字
-    var memberLast3 = memberPhone.slice(-3);
+    var row = data[i];
+    var memberName = String(row[idx.name]).trim();
+    if (!memberName) continue;
 
-    if (memberName === name.trim() && memberLast3 === String(phoneLast3).trim()) {
+    var memberPhone = String(row[idx.phone]).trim().replace(/\D/g, ''); // 移除非數字
+    var memberIdCard = String(row[idx.idCard]).trim().replace(/[^a-zA-Z0-9]/g, ''); // 移除非英數
+
+    var memberPhoneLast3 = memberPhone.slice(-3);
+    var memberIdCardLast3 = memberIdCard.slice(-3);
+
+    if (
+      memberName === name.trim() && 
+      memberIdCardLast3.toUpperCase() === String(idCardLast3).trim().toUpperCase() && 
+      memberPhoneLast3 === String(phoneLast3).trim()
+    ) {
       return {
         success: true,
         user: {
           name:   memberName,
-          branch: String(row[1]).trim(),
-          role:   String(row[3]).trim()
+          branch: idx.branch !== -1 ? String(row[idx.branch]).trim() : '',
+          role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工'
         }
       };
     }
   }
 
-  return { success: false, error: '姓名或手機末三碼不符，請重新確認' };
+  return { success: false, error: '姓名、身分證末三碼或手機末三碼不符，請重新確認' };
 }
 
 // ============================================================

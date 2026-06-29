@@ -76,7 +76,7 @@ const API = {
   /** 取得分隊列表 */
   getBranches:       ()             => API.get('getBranches'),
   /** 登入驗證 */
-  verifyLogin:       (name, phone)  => API.get('verifyLogin', { name, phone }),
+  verifyLogin:       (name, idCard, phone)  => API.get('verifyLogin', { name, idCard, phone }),
   /** 提交訪視表單 */
   submitForm:        (record)       => API.post({ action: 'submitForm', record }),
 };
