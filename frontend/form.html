@@ -274,7 +274,66 @@
       loadTeammates(session.branch, session.name),
     ]);
 
+    // 從暫存還原表單填寫狀態
+    restoreFormState();
+
     updateProgress();
+  }
+
+  // ─── 還原已填寫的表單與答案狀態 ──────────────────────────────────
+  function restoreFormState() {
+    const saved = FormStore.get();
+    if (!saved) return;
+
+    // 還原填寫日期與類型
+    if (saved.visitDate) document.getElementById('visitDate').value = saved.visitDate;
+    if (saved.visitType) {
+      document.getElementById('visitType').value = saved.visitType;
+    }
+
+    // 還原基本資料
+    if (saved.clientName) document.getElementById('clientName').value = saved.clientName;
+    if (saved.clientGender) document.getElementById('clientGender').value = saved.clientGender;
+    if (saved.clientPhone) document.getElementById('clientPhone').value = saved.clientPhone;
+    if (saved.clientAddress) document.getElementById('clientAddress').value = saved.clientAddress;
+    
+    // 還原房屋與家庭結構
+    if (saved.houseAge !== undefined) document.getElementById('houseAge').value = saved.houseAge;
+    if (saved.residentialType) document.getElementById('residentialType').value = saved.residentialType;
+    if (saved.totalFloors !== undefined) document.getElementById('totalFloors').value = saved.totalFloors;
+    if (saved.residingFloor !== undefined) document.getElementById('residingFloor').value = saved.residingFloor;
+    if (saved.buildingStructure) document.getElementById('buildingStructure').value = saved.buildingStructure;
+    
+    if (saved.familySize !== undefined) document.getElementById('familySize').value = saved.familySize;
+    if (saved.family65Plus !== undefined) document.getElementById('family65Plus').value = saved.family65Plus;
+    if (saved.familyDisabled !== undefined) document.getElementById('familyDisabled').value = saved.familyDisabled;
+    if (saved.familyUnder6 !== undefined) document.getElementById('familyUnder6').value = saved.familyUnder6;
+    if (saved.familyForeigner !== undefined) document.getElementById('familyForeigner').value = saved.familyForeigner;
+
+    // 還原 GPS
+    if (saved.gps) {
+      gpsData = { formatted: saved.gps, address: saved.gpsAddress || '' };
+      document.getElementById('gpsCoordsText').textContent = saved.gps;
+      document.getElementById('gpsResult').classList.remove('hidden');
+    }
+
+    // 還原協同志工 (選取狀態的 chip)
+    if (Array.isArray(saved.teamMembers)) {
+      document.querySelectorAll('#teammatesContainer .teammate-chip').forEach(el => {
+        const name = el.dataset.name;
+        if (saved.teamMembers.includes(name)) {
+          el.classList.add('selected');
+        }
+      });
+    }
+
+    // 還原答案物件
+    if (saved.answers) {
+      answers = { ...saved.answers };
+    }
+
+    // 重新過濾渲染題目
+    renderFilteredQuestions();
   }
 
   // ─── 載入訪視題庫 ───────────────────────────────────────────
@@ -466,7 +525,15 @@
       }
     });
 
-    // 3. 對所有題目卡片更新 answered 樣式
+    // 3. 同步簡答題文字 (Textarea)
+    document.querySelectorAll('.form-textarea').forEach(ta => {
+      const qid = ta.id.replace('ta-', '');
+      if (answers[qid] !== undefined) {
+        ta.value = answers[qid];
+      }
+    });
+
+    // 4. 對所有題目卡片更新 answered 樣式
     questions.forEach(q => {
       const ans = answers[q.id];
       const isDone = Array.isArray(ans) ? ans.length > 0 : ans && String(ans).trim();

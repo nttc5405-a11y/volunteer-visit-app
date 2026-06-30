@@ -85,8 +85,14 @@
           <p class="text-muted" style="font-size:0.75rem;margin-top:2px;">請受訪者於下方灰色區域內手寫簽名確認</p>
         </div>
       </div>
+      
+      <div style="background:#EFF6FF; border:1px solid #BFDBFE; color:#1E40AF; border-radius:var(--r-sm); padding:10px 14px; font-size:0.75rem; margin-top:12px; display:flex; align-items:center; gap:6px; font-weight:600;">
+        <span>🔄</span>
+        <span>簽名提示：您可以將手機橫過來寫，簽名空間會自動變大更舒適喔！</span>
+      </div>
+
       <div class="signature-pad-container mt-4" style="position:relative;">
-        <canvas id="signatureCanvas" class="signature-canvas" style="width:100%; height:200px; border:2px dashed var(--border); border-radius:var(--r-md); background:var(--bg-input); touch-action:none;"></canvas>
+        <canvas id="signatureCanvas" class="signature-canvas" style="width:100%; height:260px; border:2px dashed var(--border); border-radius:var(--r-md); background:var(--bg-input); touch-action:none;"></canvas>
         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
           <button class="btn btn-secondary btn-sm" onclick="clearSignature()" type="button">🧹 清除重寫</button>
         </div>
