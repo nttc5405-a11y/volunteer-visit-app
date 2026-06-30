@@ -330,6 +330,7 @@
     });
 
     evaluateDependencies();
+    syncUIFromAnswers();
   }
 
   // ─── 評估相依題目顯示狀態 ────────────────────────────────────
@@ -355,6 +356,121 @@
           markAnswered(q.id, false);
         }
       }
+    });
+  }
+
+  // ─── 套用改善建議與了解程度等智慧邏輯規則 ───────────────────────
+  function applyLogicalRules() {
+    const selectedType = document.getElementById('visitType').value;
+    
+    if (selectedType === '防火宣導') {
+      if (!Array.isArray(answers['F23'])) {
+        answers['F23'] = [];
+      }
+
+      // Rule 1: F05 (定型化契約) 選「否」
+      if (answers['F05'] === '否') {
+        if (!answers['F23'].includes('定期檢查瓦斯桶與皮管')) answers['F23'].push('定期檢查瓦斯桶與皮管');
+        if (!answers['F23'].includes('簽訂瓦斯定型化契約')) answers['F23'].push('簽訂瓦斯定型化契約');
+      } else if (answers['F05'] === '是') {
+        answers['F23'] = answers['F23'].filter(v => v !== '簽訂瓦斯定型化契約');
+      }
+
+      // Rule 2: F16 (逃生通道無雜物) 選「否」
+      if (answers['F16'] === '否') {
+        if (!answers['F23'].includes('勿在逃生通道堆放雜物')) answers['F23'].push('勿在逃生通道堆放雜物');
+      } else if (answers['F16'] === '是') {
+        answers['F23'] = answers['F23'].filter(v => v !== '勿在逃生通道堆放雜物');
+      }
+
+      // Rule 3: F17 (鐵窗安全出口) 選「否」
+      if (answers['F17'] === '否') {
+        if (!answers['F23'].includes('鐵窗預留出口並保持開啟')) answers['F23'].push('鐵窗預留出口並保持開啟');
+      } else if (answers['F17'] === '是') {
+        answers['F23'] = answers['F23'].filter(v => v !== '鐵窗預留出口並保持開啟');
+      }
+
+      // Rule 4: F19 (家庭逃生計畫) 選「否」
+      if (answers['F19'] === '否') {
+        if (!answers['F23'].includes('訂定家庭逃生計畫')) answers['F23'].push('訂定家庭逃生計畫');
+      } else if (answers['F19'] === '是') {
+        answers['F23'] = answers['F23'].filter(v => v !== '訂定家庭逃生計畫');
+      }
+
+      // Rule 5: F20 (消防設備) 選「否」，或擁有設備不全
+      const hasEquipment = answers['F20'] === '是';
+      const eqList = answers['F21'] || [];
+      const hasAlarm = eqList.includes('住宅用火災警報器');
+      const hasLight = eqList.includes('緊急照明燈');
+      
+      if (answers['F20'] === '否' || (hasEquipment && (!hasAlarm || !hasLight))) {
+        if (!answers['F23'].includes('購設消防設備')) answers['F23'].push('購設消防設備');
+      } else if (answers['F20'] === '是' && hasAlarm && hasLight) {
+        answers['F23'] = answers['F23'].filter(v => v !== '購設消防設備');
+      }
+    }
+
+    if (selectedType === '防災宣導') {
+      const disasterQids = ['D01','D02','D03','D04','D05','D06','D07','D08','D09','D10','D11','D12','D13','D14','D15','D16'];
+      
+      let noCount = 0;
+      let answeredCount = 0;
+      disasterQids.forEach(qid => {
+        if (answers[qid]) {
+          answeredCount++;
+          if (answers[qid] === '否') {
+            noCount++;
+          }
+        }
+      });
+
+      if (answeredCount > 0) {
+        if (noCount <= 3) {
+          answers['D17'] = '了解(答否3項以下)';
+        } else if (noCount <= 5) {
+          answers['D17'] = '尚可(答否4項以下)';
+        } else {
+          answers['D17'] = '不了解(答否6項以上)';
+        }
+      } else {
+        delete answers['D17'];
+      }
+    }
+  }
+
+  // ─── 將 answers 的最新狀態同步至 DOM 畫面 ───────────────────────
+  function syncUIFromAnswers() {
+    // 1. 同步單選題狀態 (Radio Group)
+    document.querySelectorAll('.radio-option').forEach(o => {
+      const qid = o.dataset.qid;
+      const val = o.dataset.val;
+      if (answers[qid] === val) {
+        o.classList.add('selected');
+        o.setAttribute('aria-checked', 'true');
+      } else {
+        o.classList.remove('selected');
+        o.setAttribute('aria-checked', 'false');
+      }
+    });
+
+    // 2. 同步複選題狀態 (Checkbox)
+    document.querySelectorAll('.checkbox-option').forEach(o => {
+      const qid = o.dataset.qid;
+      const val = o.dataset.val;
+      if (Array.isArray(answers[qid]) && answers[qid].includes(val)) {
+        o.classList.add('selected');
+        o.setAttribute('aria-checked', 'true');
+      } else {
+        o.classList.remove('selected');
+        o.setAttribute('aria-checked', 'false');
+      }
+    });
+
+    // 3. 對所有題目卡片更新 answered 樣式
+    questions.forEach(q => {
+      const ans = answers[q.id];
+      const isDone = Array.isArray(ans) ? ans.length > 0 : ans && String(ans).trim();
+      markAnswered(q.id, isDone);
     });
   }
 
@@ -497,6 +613,8 @@
     answers[qid] = val;
 
     markAnswered(qid, true);
+    applyLogicalRules();
+    syncUIFromAnswers();
     evaluateDependencies();
     updateProgress();
   }
@@ -518,6 +636,8 @@
     }
 
     markAnswered(qid, answers[qid].length > 0);
+    applyLogicalRules();
+    syncUIFromAnswers();
     evaluateDependencies();
     updateProgress();
   }
@@ -526,6 +646,8 @@
   function handleTextAnswer(qid, val) {
     answers[qid] = val;
     markAnswered(qid, val.trim().length > 0);
+    applyLogicalRules();
+    syncUIFromAnswers();
     evaluateDependencies();
     updateProgress();
   }
