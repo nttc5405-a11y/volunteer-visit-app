@@ -75,6 +75,25 @@
     </div>
   </div>
 
+  <!-- ── 受訪者手寫簽名 ── -->
+  <div class="card mt-4" id="cardSignature">
+    <div class="card-body">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">✍️</div>
+        <div>
+          <div class="section-title">受訪者手寫簽名</div>
+          <p class="text-muted" style="font-size:0.75rem;margin-top:2px;">請受訪者於下方灰色區域內手寫簽名確認</p>
+        </div>
+      </div>
+      <div class="signature-pad-container mt-4" style="position:relative;">
+        <canvas id="signatureCanvas" class="signature-canvas" style="width:100%; height:200px; border:2px dashed var(--border); border-radius:var(--r-md); background:var(--bg-input); touch-action:none;"></canvas>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="clearSignature()" type="button">🧹 清除重寫</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /.page-content -->
 
 <!-- ============ 底部操作列 ============ -->
@@ -119,6 +138,11 @@
 
 <script src="app.js"></script>
 <script>
+  // ─── 電子簽名板狀態變數 ──────────────────────────────────────
+  let canvas, ctx;
+  let isDrawing = false;
+  let hasSigned = false;
+
   // ─── 初始化：渲染所有預覽區塊 ──────────────────────────────
   function init() {
     const session = Session.require();
@@ -134,6 +158,7 @@
     renderSubmitter(session, data);
     renderClient(data);
     renderAnswers(data);
+    initSignaturePad();
   }
 
   // ─── 渲染「填寫人資訊」 ──────────────────────────────────────
@@ -219,6 +244,12 @@
 
   // ─── 送出表單 ────────────────────────────────────────────────
   async function handleSubmit() {
+    if (!hasSigned) {
+      Toast.warning('請受訪人在下方的簽名板完成手寫簽名！');
+      scrollToEl(document.getElementById('cardSignature'));
+      return;
+    }
+
     const session = Session.get();
     if (!session) return;
 
@@ -227,6 +258,9 @@
 
     btn.disabled = true;
     btn.innerHTML = '<span style="animation:spin .75s linear infinite;display:inline-block;">⏳</span> &nbsp;送出中，請勿關閉頁面...';
+
+    // 取得畫布簽名 Base64 圖檔
+    const signatureBase64 = canvas.toDataURL('image/png');
 
     try {
       const record = {
@@ -251,14 +285,22 @@
         familyForeigner:data.familyForeigner|| 0,
         teamMembers:   data.teamMembers   || [],
         answers:       data.answers       || {},
+        signature:     signatureBase64,  // 簽名資料
       };
 
       const res = await API.submitForm(record);
 
       if (res.success) {
         FormStore.clear();
-        document.getElementById('successMeta').textContent =
-          `紀錄編號：#${res.id}  ｜  ${formatDateTime()}`;
+        if (res.offline) {
+          document.getElementById('successTitle').textContent = '💾 已暫存本機！';
+          document.getElementById('successMeta').innerHTML =
+            `暫存狀態：離線儲存成功<br>系統將於恢復網路連線時，自動為您在背景同步上傳！`;
+        } else {
+          document.getElementById('successTitle').textContent = '送出成功！';
+          document.getElementById('successMeta').textContent =
+            `紀錄編號：#${res.id}  ｜  ${formatDateTime()}`;
+        }
         document.getElementById('successModal').classList.remove('hidden');
       } else {
         Toast.error('送出失敗：' + (res.error || '未知錯誤'));
@@ -266,7 +308,7 @@
       }
 
     } catch (err) {
-      Toast.error('網路連線失敗，請稍後重試：' + err.message);
+      Toast.error('系統錯誤，請重試：' + err.message);
       _resetBtn();
     }
 
@@ -274,6 +316,109 @@
       btn.disabled = false;
       btn.innerHTML = '✅ 確認送出';
     }
+  }
+
+  // ─── 初始化手寫畫布 ──────────────────────────────────────────
+  function initSignaturePad() {
+    canvas = document.getElementById('signatureCanvas');
+    if (!canvas) return;
+    ctx = canvas.getContext('2d');
+
+    // 處理高解析度螢幕模糊問題
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // 畫筆屬性
+    ctx.strokeStyle = '#1E3A8A';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // 滑鼠監聽
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+
+    // 觸控監聽 (支援手機)
+    canvas.addEventListener('touchstart', startDrawingTouch);
+    canvas.addEventListener('touchmove', drawTouch);
+    canvas.addEventListener('touchend', stopDrawing);
+  }
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    ctx.scale(ratio, ratio);
+
+    // 重設畫筆屬性（因為 resize 會重設 context）
+    ctx.strokeStyle = '#1E3A8A';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+
+  function getMousePos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }
+
+  function getTouchPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches.length === 0) return null;
+    const touch = e.touches[0];
+    return {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
+    };
+  }
+
+  function startDrawing(e) {
+    isDrawing = true;
+    const pos = getMousePos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }
+
+  function startDrawingTouch(e) {
+    e.preventDefault();
+    isDrawing = true;
+    const pos = getTouchPos(e);
+    if (!pos) return;
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }
+
+  function draw(e) {
+    if (!isDrawing) return;
+    const pos = getMousePos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    hasSigned = true;
+  }
+
+  function drawTouch(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const pos = getTouchPos(e);
+    if (!pos) return;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    hasSigned = true;
+  }
+
+  function stopDrawing() {
+    isDrawing = false;
+  }
+
+  function clearSignature() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasSigned = false;
   }
 
   // ─── 成功後繼續填下一戶 ──────────────────────────────────────

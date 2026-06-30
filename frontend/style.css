@@ -535,9 +535,9 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   margin-top: 3px;
 }
 .q-text {
-  font-size: 1.0625rem; font-weight: 700;
+  font-size: 1.2rem; font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.55;
+  line-height: 1.6;
   flex: 1;
 }
 .question-body { padding: var(--sp-4) var(--sp-5); }

@@ -300,6 +300,30 @@ function submitForm(record) {
   // 生成流水號（目前列數 = 已有筆數，不含 header）
   var id = sheet.getLastRow(); // header 是第1列，資料從第2列起，所以 lastRow 即為新 ID
 
+  // 儲存受訪人手寫簽名圖檔至 Google Drive
+  var signatureUrl = '';
+  if (record.signature && String(record.signature).indexOf('data:image/png;base64,') === 0) {
+    try {
+      var folders = DriveApp.getFoldersByName('志工訪視系統_受訪人簽名');
+      var folder;
+      if (folders.hasNext()) {
+        folder = folders.next();
+      } else {
+        folder = DriveApp.createFolder('志工訪視系統_受訪人簽名');
+      }
+
+      var contentType = 'image/png';
+      var base64Data = record.signature.replace(/^data:image\/png;base64,/, '');
+      var imageBlob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, '簽名_' + id + '_' + (record.clientName || '未命名') + '.png');
+      var file = folder.createFile(imageBlob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      signatureUrl = file.getUrl();
+    } catch (e) {
+      Logger.log('【簽名檔儲存失敗】' + e.toString());
+      signatureUrl = '儲存失敗：' + e.toString();
+    }
+  }
+
   // 取得題庫順序，確保答案欄位對齊
   var qSheet = ss.getSheetByName('訪視題庫');
   var questionIds = [];
@@ -335,7 +359,8 @@ function submitForm(record) {
     record.family65Plus !== undefined ? String(record.family65Plus) : '', // 65歲以上
     record.familyDisabled !== undefined ? String(record.familyDisabled) : '', // 行動不便
     record.familyUnder6 !== undefined ? String(record.familyUnder6) : '', // 6歲以下
-    record.familyForeigner !== undefined ? String(record.familyForeigner) : '' // 外籍人士
+    record.familyForeigner !== undefined ? String(record.familyForeigner) : '', // 外籍人士
+    signatureUrl                      // 受訪者簽名
   ];
 
   // 依題目順序附加答案

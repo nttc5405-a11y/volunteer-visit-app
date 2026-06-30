@@ -77,8 +77,22 @@ const API = {
   getBranches:       ()             => API.get('getBranches'),
   /** 登入驗證 */
   verifyLogin:       (idCard, phone, name)  => API.get('verifyLogin', { idCard, phone, name }),
-  /** 提交訪視表單 */
-  submitForm:        (record)       => API.post({ action: 'submitForm', record }),
+  
+  /** 提交訪視表單 (含離線暫存邏輯) */
+  async submitForm(record) {
+    if (!navigator.onLine) {
+      OfflineQueue.add(record);
+      return { success: true, offline: true, message: '目前為離線狀態，已將此筆紀錄儲存於本機暫存！' };
+    }
+
+    try {
+      const res = await API.post({ action: 'submitForm', record });
+      return res;
+    } catch (err) {
+      OfflineQueue.add(record);
+      return { success: true, offline: true, message: '網路連線失敗，已將此筆紀錄儲存於本機暫存！' };
+    }
+  },
 };
 
 // ============================================================
@@ -298,3 +312,66 @@ function debounce(fn, ms = 300) {
 function scrollToEl(el, block = 'center') {
   if (el) el.scrollIntoView({ behavior: 'smooth', block });
 }
+
+// ============================================================
+// 離線填報佇列管理 (OfflineQueue)
+// ============================================================
+const OfflineQueue = {
+  get() {
+    try {
+      return JSON.parse(localStorage.getItem('offline_submissions') || '[]');
+    } catch (_) {
+      return [];
+    }
+  },
+
+  add(record) {
+    const queue = OfflineQueue.get();
+    record.offlineId = 'off_' + Date.now();
+    record.queuedTime = new Date().toISOString();
+    queue.push(record);
+    localStorage.setItem('offline_submissions', JSON.stringify(queue));
+    console.log('✓ 離線紀錄已安全儲存本機：', record.offlineId);
+  },
+
+  remove(offlineId) {
+    let queue = OfflineQueue.get();
+    queue = queue.filter(r => r.offlineId !== offlineId);
+    localStorage.setItem('offline_submissions', JSON.stringify(queue));
+  },
+
+  async sync() {
+    const queue = OfflineQueue.get();
+    if (queue.length === 0) return;
+
+    if (!navigator.onLine) return; // 依然處於離線狀態
+
+    console.log(`🔄 網路已回復！開始上傳同步 ${queue.length} 筆離線紀錄...`);
+    Toast.info(`連線已回復，正在自動同步 ${queue.length} 筆離線暫存紀錄...`);
+
+    for (let i = 0; i < queue.length; i++) {
+      const record = queue[i];
+      try {
+        const res = await API.post({ action: 'submitForm', record });
+        if (res.success) {
+          OfflineQueue.remove(record.offlineId);
+          Toast.success(`案家「${record.clientName}」的離線暫存已上傳成功！`);
+        } else {
+          throw new Error(res.error || '後端錯誤');
+        }
+      } catch (err) {
+        console.error(`❌ 離線紀錄同步失敗: ${record.offlineId}，Error: ${err.message}`);
+        Toast.error(`同步「${record.clientName}」的暫存紀錄失敗，將於稍後重試：${err.message}`);
+        break; // 發生錯誤時先中斷，待下次重試以維持時間序
+      }
+    }
+  }
+};
+
+// ─── 監聽連線恢復與頁面加載完成 ──────────────────────────────────────
+window.addEventListener('online', () => OfflineQueue.sync());
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    OfflineQueue.sync();
+  }, 1500);
+});

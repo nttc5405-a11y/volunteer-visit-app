@@ -538,11 +538,12 @@
       : `<span class="q-optional">選填</span>`;
 
     card.innerHTML = `
-      <div class="question-header">
-        <span class="q-badge">${q.id}</span>
-        <span class="q-category">${q.category}</span>
-        ${reqBadge}
-        <span class="q-text">${q.content}</span>
+      <div class="question-header" style="flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; gap: 8px; width: 100%; align-items: center;">
+          <span class="q-badge">${q.id}</span>
+          ${reqBadge}
+        </div>
+        <span class="q-text" style="width: 100%; margin-top: 4px;">${q.content}</span>
       </div>
       <div class="question-body" id="qbody-${q.id}">
         ${renderInput(q)}
