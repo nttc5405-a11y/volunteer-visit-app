@@ -259,8 +259,21 @@
     btn.disabled = true;
     btn.innerHTML = '<span style="animation:spin .75s linear infinite;display:inline-block;">⏳</span> &nbsp;送出中，請勿關閉頁面...';
 
-    // 取得畫布簽名 Base64 圖檔
-    const signatureBase64 = canvas.toDataURL('image/png');
+    // 取得畫布簽名 Base64 圖檔 (將透明背景 Canvas 轉為白底高壓縮率 JPEG，減少傳輸大小並防止超時)
+    let signatureBase64 = '';
+    try {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.fillStyle = '#FFFFFF';
+      tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      tempCtx.drawImage(canvas, 0, 0);
+      signatureBase64 = tempCanvas.toDataURL('image/jpeg', 0.5); // 0.5 壓縮率，品質好且檔案極小
+    } catch (e) {
+      console.error('轉檔失敗，採用原始 PNG：', e);
+      signatureBase64 = canvas.toDataURL('image/png');
+    }
 
     try {
       const record = {

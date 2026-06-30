@@ -302,7 +302,7 @@ function submitForm(record) {
 
   // 儲存受訪人手寫簽名圖檔至 Google Drive
   var signatureUrl = '';
-  if (record.signature && String(record.signature).indexOf('data:image/png;base64,') === 0) {
+  if (record.signature && String(record.signature).indexOf('data:') === 0) {
     try {
       var folders = DriveApp.getFoldersByName('志工訪視系統_受訪人簽名');
       var folder;
@@ -312,12 +312,22 @@ function submitForm(record) {
         folder = DriveApp.createFolder('志工訪視系統_受訪人簽名');
       }
 
-      var contentType = 'image/png';
-      var base64Data = record.signature.replace(/^data:image\/png;base64,/, '');
-      var imageBlob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, '簽名_' + id + '_' + (record.clientName || '未命名') + '.png');
-      var file = folder.createFile(imageBlob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      signatureUrl = file.getUrl();
+      var contentType = 'image/jpeg';
+      var ext = '.jpg';
+      if (record.signature.indexOf('image/png') !== -1) {
+        contentType = 'image/png';
+        ext = '.png';
+      }
+
+      var matches = record.signature.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        contentType = matches[1];
+        var base64Data = matches[2];
+        var imageBlob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, '簽名_' + id + '_' + (record.clientName || '未命名') + ext);
+        var file = folder.createFile(imageBlob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        signatureUrl = file.getUrl();
+      }
     } catch (e) {
       Logger.log('【簽名檔儲存失敗】' + e.toString());
       signatureUrl = '儲存失敗：' + e.toString();
