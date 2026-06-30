@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>數據分析儀表板 - 志工居家訪視系統</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Leaflet 地圖 CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-page">
+
+  <!-- ============ 頂部導覽列 ============ -->
+  <header class="app-header" role="banner">
+    <div class="app-header-inner">
+      <div class="app-brand" onclick="window.location.href='form.html'" style="cursor:pointer;">
+        <span class="app-logo-emoji" aria-hidden="true">📊</span>
+        <div>
+          <h1 class="app-name">訪視數據分析</h1>
+          <p class="app-subtitle">志工居家訪視電子化系統</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary btn-sm" onclick="window.location.href='form.html'">
+          📝 回到填報
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="refreshDashboard()" id="refreshBtn">
+          🔄 重新整理
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ 主頁面內容 ============ -->
+  <main class="page-content" style="max-width:1200px; padding-bottom:60px;">
+    
+    <!-- 數據來源狀態標示 -->
+    <div id="dataNotice" style="background:#EFF6FF; border:1px solid #BFDBFE; color:#1E40AF; border-radius:var(--r-md); padding:12px 16px; font-size:0.8rem; margin-bottom:20px; font-weight:600; display:flex; align-items:center; gap:8px;">
+      <span>💡</span>
+      <span id="dataNoticeText">系統目前正以「模擬演示數據」渲染，以展示完整報表成效。</span>
+    </div>
+
+    <!-- ─── 關鍵指標區 KPI Cards Grid ─── -->
+    <section class="dashboard-grid" aria-label="關鍵指標">
+      
+      <div class="kpi-card info">
+        <div>
+          <div class="kpi-title">總訪視戶數</div>
+          <div class="kpi-val" id="kpiTotalVisits">0</div>
+          <div class="kpi-desc">累計完成關懷戶數</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🏠</div>
+      </div>
+
+      <div class="kpi-card success">
+        <div>
+          <div class="kpi-title">住警器安裝率</div>
+          <div class="kpi-val" id="kpiSmokeAlarm">0%</div>
+          <div class="kpi-desc">訪視戶中已安裝住警器比例</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🧯</div>
+      </div>
+
+      <div class="kpi-card warning">
+        <div>
+          <div class="kpi-title">防火宣導比率</div>
+          <div class="kpi-val" id="kpiFireRate">0%</div>
+          <div class="kpi-desc">預防住宅火災訪視比重</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🔥</div>
+      </div>
+
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-title">老舊住宅比率</div>
+          <div class="kpi-val" id="kpiOldHouse">0%</div>
+          <div class="kpi-desc">屋齡大於 30 年之住宅</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🏚️</div>
+      </div>
+
+    </section>
+
+    <!-- ─── 統計圖表第一列：分隊統計與歷史趨勢 ─── -->
+    <section class="dashboard-row">
+      <!-- 左側：各分隊訪視排名 -->
+      <div class="dashboard-col-6">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🚒 各分隊訪視戶數統計</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="branchChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <!-- 右側：歷史訪視趨勢 -->
+      <div class="dashboard-col-6">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📈 每月訪視戶數歷史趨勢</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── 統計圖表第二列：問卷題目動態交叉分析 ─── -->
+    <section class="dashboard-row">
+      <!-- 左側：題目動態分析圓餅圖 -->
+      <div class="dashboard-col-6">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📊 題庫答案比例動態分析</span>
+            <select id="questionSelect" class="dashboard-select" onchange="renderDynamicQuestionChart()">
+              <!-- 動態載入 -->
+            </select>
+          </div>
+          <div class="chart-container" style="display:flex; align-items:center; justify-content:center;">
+            <div style="width:100%; max-width:280px; margin:0 auto;">
+              <canvas id="dynamicPieChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 右側：活躍志工績效表 -->
+      <div class="dashboard-col-6">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🏆 活躍志工榮譽榜</span>
+          </div>
+          <div style="flex:1; overflow-x:auto;">
+            <table class="rank-table">
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>志工姓名</th>
+                  <th>所屬分隊</th>
+                  <th>訪視次數</th>
+                </tr>
+              </thead>
+              <tbody id="volunteerRankBody">
+                <!-- 動態載入 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── 第三列：防宣服務 GPS 定位足跡 ─── -->
+    <section class="card mt-4">
+      <div class="card-body">
+        <div class="section-header" style="margin-bottom:12px;">
+          <div class="section-icon" aria-hidden="true">🗺️</div>
+          <div>
+            <div class="section-title">訪視定位足跡分佈</div>
+            <p class="text-muted text-xs" style="margin-top:2px;">地圖標示已關懷訪視案家，點選圖示可看訪視細節與簽名連結</p>
+          </div>
+        </div>
+        <div id="map" class="map-container"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // 全域變數
+    let rawRecords = [];
+    let activeQuestions = [];
+    let mapInstance = null;
+    let markersLayer = null;
+
+    // 圖表實例
+    let branchChartObj = null;
+    let trendChartObj = null;
+    let dynamicChartObj = null;
+
+    // 模擬 (Mock) 數據庫：若真實試算表無資料或未設定 API 時的展示數據
+    const MOCK_QUESTIONS = [
+      { id: 'F03', content: '是否使用合格瓦斯鋼瓶？', visitType: '防火宣導' },
+      { id: 'F05', content: '是否有與瓦斯業者簽訂液化石油氣定型化契約？', visitType: '防火宣導' },
+      { id: 'F10', content: '熱水器是否安裝於通風良好處？', visitType: '防火宣導' },
+      { id: 'F16', content: '樓梯處及其他逃生通道是否無堆放雜物？', visitType: '防火宣導' },
+      { id: 'F17', content: '家中陽台裝設之鐵窗是否有預留安全出口並保持可以開啟？', visitType: '防火宣導' },
+      { id: 'F19', content: '是否有訂定家庭逃生計畫及演練？', visitType: '防火宣導' },
+      { id: 'F20', content: '您家中是否有消防設備？', visitType: '防火宣導' },
+      { id: 'D01', content: '是否知道氣象局發布颱風或豪雨特報時的警戒資訊？', visitType: '防災宣導' },
+      { id: 'D03', content: '是否知道附近的避難收容所位置？', visitType: '防災宣導' },
+      { id: 'D07', content: '家中是否有準備緊急避難包？', visitType: '防災宣導' },
+      { id: 'D17', content: '對災害了解程度評估', visitType: '防災宣導' }
+    ];
+
+    const MOCK_RECORDS = [
+      { id: 1, visitDate: '2026-06-01', visitType: '防火宣導', submitter: '張大明', branch: '成功分隊', clientName: '王奶奶', gps: '23.100123,121.376889', houseAge: 35, familySize: 2, answers: { F03: '是', F05: '否', F10: '是', F16: '否', F17: '是', F19: '否', F20: '是', F21: ['滅火器', '住宅用火災警報器'] } },
+      { id: 2, visitDate: '2026-06-05', visitType: '防火宣導', submitter: '李秀琴', branch: '長濱分隊', clientName: '陳阿公', gps: '23.310456,121.456123', houseAge: 42, familySize: 1, answers: { F03: '是', F05: '是', F10: '否', F16: '是', F17: '否', F19: '否', F20: '否', F21: [] } },
+      { id: 3, visitDate: '2026-06-10', visitType: '防災宣導', submitter: '張大明', branch: '成功分隊', clientName: '林先生', gps: '23.102345,121.375123', houseAge: 12, familySize: 4, answers: { D01: '是', D03: '是', D07: '否', D17: '尚可(答否4項以下)' } },
+      { id: 4, visitDate: '2026-06-12', visitType: '防火宣導', submitter: '王小華', branch: '東河分隊', clientName: '趙小姐', gps: '22.973456,121.301234', houseAge: 25, familySize: 3, answers: { F03: '是', F05: '是', F10: '是', F16: '是', F17: '是', F19: '是', F20: '是', F21: ['住宅用火災警報器', '緊急照明燈'] } },
+      { id: 5, visitDate: '2026-06-15', visitType: '防災宣導', submitter: '李秀琴', branch: '長濱分隊', clientName: '黃阿嬤', gps: '23.315123,121.458999', houseAge: 50, familySize: 2, answers: { D01: '是', D03: '否', D07: '否', D17: '不了解(答否6項以上)' } },
+      { id: 6, visitDate: '2026-06-18', visitType: '防火宣導', submitter: '張大明', branch: '成功分隊', clientName: '周先生', gps: '23.098888,121.372222', houseAge: 28, familySize: 5, answers: { F03: '是', F05: '是', F10: '是', F16: '是', F17: '是', F19: '是', F20: '是', F21: ['滅火器', '住宅用火災警報器', '緊急照明燈'] } },
+      { id: 7, visitDate: '2026-06-20', visitType: '防災宣導', submitter: '陳志強', branch: '成功分隊', clientName: '許大叔', gps: '23.104444,121.378888', houseAge: 18, familySize: 3, answers: { D01: '是', D03: '是', D07: '是', D17: '了解(答否3項以下)' } }
+    ];
+
+    // ============================================================
+    // 初始化儀表板
+    // ============================================================
+    window.addEventListener('DOMContentLoaded', async () => {
+      // 1. 初始化 Leaflet 地圖（中心設在台東成功鎮）
+      initMap();
+
+      // 2. 獲取數據
+      await refreshDashboard();
+    });
+
+    function initMap() {
+      // 成功鎮坐標中心 (23.100123, 121.376889)
+      mapInstance = L.map('map', {
+        scrollWheelZoom: false
+      }).setView([23.10, 121.38], 10);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(mapInstance);
+
+      markersLayer = L.layerGroup().addTo(mapInstance);
+    }
+
+    // ============================================================
+    // 重新載入數據與更新 UI
+    // ============================================================
+    async function refreshDashboard() {
+      const refreshBtn = document.getElementById('refreshBtn');
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳ 讀取中...';
+
+      let isRealData = false;
+      
+      try {
+        // 先載入真實問卷題目
+        try {
+          const qRes = await API.getQuestions();
+          if (qRes.success && qRes.data) {
+            activeQuestions = qRes.data;
+          }
+        } catch (_) {
+          console.warn('無法連線取得後端題庫，採用預設展示題庫。');
+        }
+
+        // 載入真實訪視紀錄
+        const res = await API.get('getDashboardData');
+        if (res.success && res.data && res.data.length > 0) {
+          rawRecords = res.data;
+          isRealData = true;
+        } else {
+          throw new Error('試算表無資料');
+        }
+      } catch (err) {
+        console.warn('無法取得後端真實數據，切換為「模擬展示數據」：', err.message);
+        rawRecords = MOCK_RECORDS;
+        if (activeQuestions.length === 0) {
+          activeQuestions = MOCK_QUESTIONS;
+        }
+      }
+
+      // 更新數據標籤
+      const notice = document.getElementById('dataNotice');
+      const noticeText = document.getElementById('dataNoticeText');
+      if (isRealData) {
+        notice.style.background = '#ECFDF5';
+        notice.style.borderColor = '#A7F3D0';
+        notice.style.color = '#065F46';
+        noticeText.textContent = `✓ 系統目前已成功連線，正在解析「${rawRecords.length} 筆真實試算表數據」。`;
+      } else {
+        notice.style.background = '#EFF6FF';
+        notice.style.borderColor = '#BFDBFE';
+        notice.style.color = '#1E40AF';
+        noticeText.textContent = '💡 系統尚未檢測到真實雲端資料，目前以「模擬演示數據」渲染，以展示完整報表成效。';
+      }
+
+      // 3. 更新 KPI 指標看板
+      updateKPICards();
+
+      // 4. 繪製統計圖表
+      renderBranchChart();
+      renderTrendChart();
+      
+      // 5. 初始化並繪製動態分析下拉與圓餅圖
+      initDynamicQuestionSelector();
+
+      // 6. 渲染活躍志工排行榜
+      renderVolunteerRank();
+
+      // 7. 渲染 GPS 地圖標記
+      renderMapMarkers();
+
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '🔄 重新整理';
+    }
+
+    // ============================================================
+    // 更新 KPI 看板數值
+    // ============================================================
+    function updateKPICards() {
+      // 1. 總數
+      document.getElementById('kpiTotalVisits').textContent = rawRecords.length;
+
+      // 2. 防災/防火宣導佔比
+      const fireCount = rawRecords.filter(r => r.visitType === '防火宣導').length;
+      const fireRate = rawRecords.length > 0 ? Math.round((fireCount / rawRecords.length) * 100) : 0;
+      document.getElementById('kpiFireRate').textContent = `${fireRate}%`;
+
+      // 3. 住警器安裝率 (檢查 F21 含有「住宅用火災警報器」之比率)
+      let smokeAlarmInstalled = 0;
+      let smokeAlarmApplicable = 0;
+      rawRecords.forEach(r => {
+        if (r.visitType === '防火宣導') {
+          smokeAlarmApplicable++;
+          const eq = r.answers?.F21 || [];
+          if (Array.isArray(eq) && eq.includes('住宅用火災警報器')) {
+            smokeAlarmInstalled++;
+          }
+        }
+      });
+      const smokeAlarmRate = smokeAlarmApplicable > 0 ? Math.round((smokeAlarmInstalled / smokeAlarmApplicable) * 100) : 0;
+      document.getElementById('kpiSmokeAlarm').textContent = `${smokeAlarmRate}%`;
+
+      // 4. 老舊房屋比率 (屋齡 > 30 年)
+      const oldHouseCount = rawRecords.filter(r => r.houseAge >= 30).length;
+      const oldHouseRate = rawRecords.length > 0 ? Math.round((oldHouseCount / rawRecords.length) * 100) : 0;
+      document.getElementById('kpiOldHouse').textContent = `${oldHouseRate}%`;
+    }
+
+    // ============================================================
+    // 繪製「🚒 各分隊訪視統計長條圖」
+    // ============================================================
+    function renderBranchChart() {
+      // 統計各分隊完成數量
+      const branchCounts = {};
+      rawRecords.forEach(r => {
+        const b = r.branch || '未分配';
+        branchCounts[b] = (branchCounts[b] || 0) + 1;
+      });
+
+      // 排序分隊
+      const sortedBranches = Object.entries(branchCounts).sort((a, b) => b[1] - a[1]);
+      const labels = sortedBranches.map(x => x[0]);
+      const values = sortedBranches.map(x => x[1]);
+
+      if (branchChartObj) branchChartObj.destroy();
+
+      const ctx = document.getElementById('branchChart').getContext('2d');
+      branchChartObj = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '訪視戶數',
+            data: values,
+            backgroundColor: 'rgba(30, 58, 138, 0.85)', // var(--c-primary)
+            borderColor: '#1E3A8A',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y', // 橫向長條圖
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+
+    // ============================================================
+    // 繪製「📈 每月訪視趨勢折線圖」
+    // ============================================================
+    function renderTrendChart() {
+      const monthlyCounts = {};
+      rawRecords.forEach(r => {
+        const dateStr = r.visitDate || '';
+        if (dateStr.length >= 7) {
+          const month = dateStr.slice(0, 7); // "YYYY-MM"
+          monthlyCounts[month] = (monthlyCounts[month] || 0) + 1;
+        }
+      });
+
+      // 排序月份
+      const sortedMonths = Object.keys(monthlyCounts).sort();
+      const labels = sortedMonths;
+      const values = sortedMonths.map(m => monthlyCounts[m]);
+
+      if (trendChartObj) trendChartObj.destroy();
+
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      trendChartObj = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels.length > 0 ? labels : ['無資料'],
+          datasets: [{
+            label: '單月訪視量',
+            data: values.length > 0 ? values : [0],
+            borderColor: '#0F766E', // var(--c-secondary)
+            backgroundColor: 'rgba(15, 118, 110, 0.1)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 3,
+            pointBackgroundColor: '#0F766E',
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+
+    // ============================================================
+    // 初始化「問卷動態分析選單」
+    // ============================================================
+    function initDynamicQuestionSelector() {
+      const select = document.getElementById('questionSelect');
+      select.innerHTML = '';
+
+      // 只篩選是非題、單選題進行比例圓餅圖分析
+      const analyzable = activeQuestions.filter(q => q.type === '是否題' || q.type === '單選題');
+
+      if (analyzable.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '無可分析的單選題目';
+        select.appendChild(opt);
+        return;
+      }
+
+      analyzable.forEach(q => {
+        const opt = document.createElement('option');
+        opt.value = q.id;
+        opt.textContent = `${q.id} ${q.content.length > 25 ? q.content.slice(0, 25) + '...' : q.content}`;
+        select.appendChild(opt);
+      });
+
+      // 預設渲染第一款題目
+      renderDynamicQuestionChart();
+    }
+
+    // ─── 繪製選定題目的圓餅分析圖 ──────────────────────────────────────
+    function renderDynamicQuestionChart() {
+      const qid = document.getElementById('questionSelect').value;
+      if (!qid) return;
+
+      const q = activeQuestions.find(x => x.id === qid);
+      if (!q) return;
+
+      // 統計該題目在 rawRecords 的回答分佈
+      const answersCounts = {};
+      let totalAnswered = 0;
+
+      rawRecords.forEach(r => {
+        // 只有該宣導類型的資料才有此題目的答案
+        if (r.visitType === q.visitType) {
+          const ans = r.answers?.[qid];
+          if (ans !== undefined && ans !== '') {
+            const ansStr = String(ans).trim();
+            answersCounts[ansStr] = (answersCounts[ansStr] || 0) + 1;
+            totalAnswered++;
+          }
+        }
+      });
+
+      const labels = Object.keys(answersCounts);
+      const values = Object.values(answersCounts);
+
+      // 若完全無人作答，顯示空狀態
+      const finalLabels = totalAnswered > 0 ? labels : ['無填答數據'];
+      const finalValues = totalAnswered > 0 ? values : [1];
+      const backgroundColors = totalAnswered > 0 
+        ? ['#1E3A8A', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'].slice(0, labels.length)
+        : ['#E2E8F0'];
+
+      if (dynamicChartObj) dynamicChartObj.destroy();
+
+      const ctx = document.getElementById('dynamicPieChart').getContext('2d');
+      dynamicChartObj = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: finalLabels,
+          datasets: [{
+            data: finalValues,
+            backgroundColor: backgroundColors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 12, font: { size: 11 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  if (totalAnswered === 0) return '尚未有志工填報本題的有效答案';
+                  const val = context.raw;
+                  const pct = Math.round((val / totalAnswered) * 100);
+                  return ` ${context.label}: ${val} 戶 (${pct}%)`;
+                }
+              }
+            }
+          },
+          cutout: '65%' // 環形圖空心比例
+        }
+      });
+    }
+
+    // ============================================================
+    // 渲染「活躍志工榮譽榜」
+    // ============================================================
+    function renderVolunteerRank() {
+      const volCounts = {};
+      rawRecords.forEach(r => {
+        const name = r.submitter;
+        const branch = r.branch || '無分隊';
+        if (!name) return;
+
+        const key = `${name}||${branch}`;
+        volCounts[key] = (volCounts[key] || 0) + 1;
+      });
+
+      // 排序志工
+      const sorted = Object.entries(volCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5); // 取前五名
+
+      const tbody = document.getElementById('volunteerRankBody');
+      tbody.innerHTML = '';
+
+      if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">尚未有志工填報紀錄</td></tr>';
+        return;
+      }
+
+      sorted.forEach((item, index) => {
+        const [key, count] = item;
+        const [name, branch] = key.split('||');
+        const rank = index + 1;
+        
+        let badgeClass = 'top-other';
+        if (rank === 1) badgeClass = 'top-1';
+        if (rank === 2) badgeClass = 'top-2';
+        if (rank === 3) badgeClass = 'top-3';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="rank-badge ${badgeClass}">${rank}</span></td>
+          <td><strong>${name}</strong></td>
+          <td>${branch}</td>
+          <td><span class="text-primary font-bold">${count} 戶</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ============================================================
+    // 渲染「地圖上的 GPS 訪視足跡」
+    // ============================================================
+    function renderMapMarkers() {
+      // 1. 清空舊標記
+      markersLayer.clearLayers();
+
+      const bounds = [];
+
+      rawRecords.forEach(r => {
+        if (!r.gps) return;
+
+        const parts = r.gps.split(',');
+        if (parts.length !== 2) return;
+
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        // 標記樣式分色 (防火: 藍色, 防災: 橘色)
+        const markerColor = r.visitType === '防火宣導' ? '#1E3A8A' : '#F59E0B';
+
+        const customMarker = L.circleMarker([lat, lng], {
+          radius: 8,
+          fillColor: markerColor,
+          color: '#ffffff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.85
+        });
+
+        // 綁定 Popup
+        const popupContent = `
+          <div style="font-family:'Noto Sans TC', sans-serif; font-size:12px; width:160px; line-height:1.4;">
+            <div style="font-weight:700; border-bottom:1px solid #E2E8F0; padding-bottom:4px; margin-bottom:4px; font-size:13px; color:#1E3A8A;">
+              🏠 案家: ${r.clientName || '未填'}
+            </div>
+            <div><b>訪視分隊:</b> ${r.branch || '無'}</div>
+            <div><b>訪視日期:</b> ${r.visitDate || '無'}</div>
+            <div><b>宣導類型:</b> ${r.visitType}</div>
+            <div><b>主填人員:</b> ${r.submitter}</div>
+            <div style="margin-top:6px; font-size:10px; color:#64748B;">GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+          </div>
+        `;
+
+        customMarker.bindPopup(popupContent);
+        markersLayer.addLayer(customMarker);
+        bounds.push([lat, lng]);
+      });
+
+      // 2. 如果有標記，自動調整地圖縮放視角包覆所有點
+      if (bounds.length > 0 && mapInstance) {
+        mapInstance.fitBounds(bounds, { padding: [40, 40] });
+      }
+    }
+  </script>
+</body>
+</html>

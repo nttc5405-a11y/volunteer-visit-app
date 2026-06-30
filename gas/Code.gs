@@ -39,6 +39,9 @@ function doGet(e) {
       case 'verifyLogin':
         result = verifyLogin(params.idCard, params.phone, params.name);
         break;
+      case 'getDashboardData':
+        result = getDashboardData();
+        break;
       default:
         result = { success: false, error: '未知的 action: ' + action };
     }
@@ -442,4 +445,76 @@ function splitToBranch(record, id) {
     }
     break;
   }
+}
+
+// ============================================================
+// 取得儀表板分析所需的訪視紀錄統計資料
+// ============================================================
+function getDashboardData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('訪視紀錄表');
+  if (!sheet) return { success: false, error: '找不到「訪視紀錄表」工作表。' };
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [] };
+  }
+
+  var headers = data[0];
+  var colIdx = {};
+  for (var c = 0; c < headers.length; c++) {
+    colIdx[String(headers[c]).trim()] = c;
+  }
+
+  var records = [];
+  
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var id = row[colIdx['流水號'] || 0];
+    if (!id) continue;
+
+    var answers = {};
+    
+    // 將 F01~F24, D01~D18 問卷回答加入 answers 物件
+    for (var f = 1; f <= 24; f++) {
+      var fid = 'F' + String(f).padStart(2, '0');
+      if (colIdx[fid] !== undefined) {
+        answers[fid] = row[colIdx[fid]];
+      }
+    }
+    for (var d = 1; d <= 18; d++) {
+      var did = 'D' + String(d).padStart(2, '0');
+      if (colIdx[did] !== undefined) {
+        answers[did] = row[colIdx[did]];
+      }
+    }
+
+    // 格式化日期防止 json 解析出錯
+    var visitDateVal = '';
+    try {
+      if (row[colIdx['訪視日期'] || 2]) {
+        visitDateVal = Utilities.formatDate(new Date(row[colIdx['訪視日期'] || 2]), ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+      }
+    } catch (e) {
+      visitDateVal = String(row[colIdx['訪視日期'] || 2]);
+    }
+
+    records.push({
+      id:                id,
+      timestamp:         row[colIdx['填報時間'] || 1],
+      visitDate:         visitDateVal,
+      visitType:         row[colIdx['訪視類型'] || 3],
+      submitter:         row[colIdx['主填寫人姓名'] || 4],
+      branch:            row[colIdx['所屬分隊'] || 6],
+      clientName:        row[colIdx['案家姓名'] || 7],
+      gps:               row[colIdx['GPS定位座標'] || 11],
+      houseAge:          parseInt(row[colIdx['房屋屋齡'] || 12]) || 0,
+      residentialType:   row[colIdx['住宅形式'] || 13],
+      buildingStructure: row[colIdx['建築結構'] || 16],
+      familySize:        parseInt(row[colIdx['家庭總人數'] || 17]) || 0,
+      answers:           answers
+    });
+  }
+
+  return { success: true, data: records };
 }
