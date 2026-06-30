@@ -78,29 +78,42 @@
   <!-- ── 受訪者手寫簽名 ── -->
   <div class="card mt-4" id="cardSignature">
     <div class="card-body">
-      <div class="section-header">
+      <div class="section-header" style="margin-bottom:12px;">
         <div class="section-icon" aria-hidden="true">✍️</div>
         <div>
           <div class="section-title">受訪者手寫簽名</div>
-          <p class="text-muted" style="font-size:0.75rem;margin-top:2px;">請受訪者於下方灰色區域內手寫簽名確認</p>
+          <p class="text-muted" style="font-size:0.75rem;margin-top:2px;">請點選下方框格進行手寫簽名確認</p>
         </div>
       </div>
       
-      <div style="background:#EFF6FF; border:1px solid #BFDBFE; color:#1E40AF; border-radius:var(--r-sm); padding:10px 14px; font-size:0.75rem; margin-top:12px; display:flex; align-items:center; gap:6px; font-weight:600;">
-        <span>🔄</span>
-        <span>簽名提示：您可以將手機橫過來寫，簽名空間會自動變大更舒適喔！</span>
-      </div>
-
-      <div class="signature-pad-container mt-4" style="position:relative;">
-        <canvas id="signatureCanvas" class="signature-canvas" style="width:100%; height:260px; border:2px dashed var(--border); border-radius:var(--r-md); background:var(--bg-input); touch-action:none;"></canvas>
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
-          <button class="btn btn-secondary btn-sm" onclick="clearSignature()" type="button">🧹 清除重寫</button>
-        </div>
+      <div id="signaturePreviewBox" onclick="openSignatureModal()" style="width:100%; height:120px; border:2px dashed var(--border); border-radius:var(--r-md); background:var(--bg-input); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; position:relative; transition: var(--transition); border-color:#94A3B8;">
+        <span style="font-size:2.2rem; color:var(--text-muted); margin-bottom:4px;">✍️</span>
+        <span style="font-size:0.875rem; color:var(--c-primary); font-weight:700;">點此開啟全螢幕手寫簽名</span>
       </div>
     </div>
   </div>
 
 </div><!-- /.page-content -->
+
+<!-- ============ 全螢幕手寫簽名 Modal ============ -->
+<div id="signatureModal" class="fullscreen-modal hidden">
+  <div class="fullscreen-modal-content">
+    <div class="fullscreen-modal-header">
+      <div>
+        <span style="font-weight:800; font-size:1.05rem; color:var(--text-primary); display:block;">✍️ 請受訪者手寫簽名</span>
+        <span style="font-size:0.75rem; color:var(--c-primary-light); font-weight:600; margin-top:2px; display:block;">🔄 建議將手機打橫書寫，簽名空間更大更便利！</span>
+      </div>
+    </div>
+    <div class="fullscreen-canvas-container">
+      <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+    </div>
+    <div class="fullscreen-modal-footer">
+      <button class="btn btn-secondary btn-lg" onclick="closeSignatureModal(false)" type="button">取消</button>
+      <button class="btn btn-warning btn-lg" onclick="clearSignature()" type="button" style="background:#F59E0B; border-color:#F59E0B; color:#fff;">🧹 清除重寫</button>
+      <button class="btn btn-success btn-lg" onclick="closeSignatureModal(true)" type="button" style="min-width:130px;">💾 確定儲存</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============ 底部操作列 ============ -->
 <div class="bottom-bar">
@@ -148,6 +161,7 @@
   let canvas, ctx;
   let isDrawing = false;
   let hasSigned = false;
+  let signatureDataUrl = ''; // 儲存簽名 JPEG Base64
 
   // ─── 初始化：渲染所有預覽區塊 ──────────────────────────────
   function init() {
@@ -250,8 +264,8 @@
 
   // ─── 送出表單 ────────────────────────────────────────────────
   async function handleSubmit() {
-    if (!hasSigned) {
-      Toast.warning('請受訪人在下方的簽名板完成手寫簽名！');
+    if (!signatureDataUrl) {
+      Toast.warning('請點選下方的框格完成手寫簽名確認！');
       scrollToEl(document.getElementById('cardSignature'));
       return;
     }
@@ -265,21 +279,7 @@
     btn.disabled = true;
     btn.innerHTML = '<span style="animation:spin .75s linear infinite;display:inline-block;">⏳</span> &nbsp;送出中，請勿關閉頁面...';
 
-    // 取得畫布簽名 Base64 圖檔 (將透明背景 Canvas 轉為白底高壓縮率 JPEG，減少傳輸大小並防止超時)
-    let signatureBase64 = '';
-    try {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCtx.fillStyle = '#FFFFFF';
-      tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-      tempCtx.drawImage(canvas, 0, 0);
-      signatureBase64 = tempCanvas.toDataURL('image/jpeg', 0.5); // 0.5 壓縮率，品質好且檔案極小
-    } catch (e) {
-      console.error('轉檔失敗，採用原始 PNG：', e);
-      signatureBase64 = canvas.toDataURL('image/png');
-    }
+    const signatureBase64 = signatureDataUrl;
 
     try {
       const record = {
@@ -345,7 +345,6 @@
 
     // 處理高解析度螢幕模糊問題
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
 
     // 畫筆屬性
     ctx.strokeStyle = '#1E3A8A';
@@ -363,16 +362,74 @@
     canvas.addEventListener('touchstart', startDrawingTouch);
     canvas.addEventListener('touchmove', drawTouch);
     canvas.addEventListener('touchend', stopDrawing);
+    
+    window.addEventListener('resize', resizeCanvas);
+  }
+
+  function openSignatureModal() {
+    const modal = document.getElementById('signatureModal');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // 鎖定背景滾動
+
+    setTimeout(() => {
+      resizeCanvas();
+      if (!signatureDataUrl) {
+        clearSignature();
+      }
+    }, 150);
+  }
+
+  function closeSignatureModal(save) {
+    const modal = document.getElementById('signatureModal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = ''; // 恢復網頁滾動
+
+    if (save) {
+      if (!hasSigned) {
+        Toast.warning('未簽寫任何內容！');
+        signatureDataUrl = '';
+        document.getElementById('signaturePreviewBox').innerHTML = `
+          <span style="font-size:2.2rem; color:var(--text-muted); margin-bottom:4px;">✍️</span>
+          <span style="font-size:0.875rem; color:var(--c-primary); font-weight:700;">點此開啟全螢幕手寫簽名</span>
+        `;
+        return;
+      }
+      try {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.fillStyle = '#FFFFFF';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(canvas, 0, 0);
+        signatureDataUrl = tempCanvas.toDataURL('image/jpeg', 0.5);
+
+        const previewBox = document.getElementById('signaturePreviewBox');
+        previewBox.innerHTML = `
+          <img src="${signatureDataUrl}" style="max-height:100%; max-width:100%; object-fit:contain;" alt="Signature Preview" />
+          <div style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:10px; padding:2px 6px; border-radius:4px;">
+            已簽名 (點此重簽)
+          </div>
+        `;
+      } catch (e) {
+        console.error(e);
+        signatureDataUrl = canvas.toDataURL('image/png');
+      }
+    } else {
+      if (!signatureDataUrl) {
+        hasSigned = false;
+      }
+    }
   }
 
   function resizeCanvas() {
-    const rect = canvas.getBoundingClientRect();
+    if (!canvas) return;
+    const rect = canvas.parentNode.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
     canvas.width = rect.width * ratio;
     canvas.height = rect.height * ratio;
     ctx.scale(ratio, ratio);
 
-    // 重設畫筆屬性（因為 resize 會重設 context）
     ctx.strokeStyle = '#1E3A8A';
     ctx.lineWidth = 3.5;
     ctx.lineCap = 'round';
