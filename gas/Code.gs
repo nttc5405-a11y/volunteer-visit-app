@@ -116,8 +116,7 @@ function getQuestions() {
 // ============================================================
 // 輔助函式：動態取得「人員帳號管理」各欄位的欄位索引 (0-based)
 // ============================================================
-function getColumnIndexes(sheet) {
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+function getColumnIndexes(headers) {
   var indexes = {
     name: -1,
     branch: -1,
@@ -151,7 +150,7 @@ function getAllMembers() {
   if (!sheet) return { success: false, error: '找不到「人員帳號管理」工作表。' };
 
   var data = sheet.getDataRange().getValues();
-  var idx = getColumnIndexes(sheet);
+  var idx = getColumnIndexes(data[0]);
 
   if (idx.name === -1) {
     return { success: false, error: '人員工作表缺少「姓名」欄位' };
@@ -221,7 +220,7 @@ function verifyLogin(idCardLast3, phoneLast3, name) {
   if (!sheet) return { success: false, error: '系統錯誤：找不到人員資料工作表' };
 
   var data = sheet.getDataRange().getValues();
-  var idx = getColumnIndexes(sheet);
+  var idx = getColumnIndexes(data[0]);
 
   if (idx.name === -1 || idx.phone === -1 || idx.idCard === -1) {
     return { success: false, error: '系統錯誤：人員工作表缺少必要欄位（姓名、手機或身分證字號）' };
