@@ -508,10 +508,10 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   margin-top: 2px;
 }
 .q-category {
-  font-size: .75rem; font-weight: 600;
+  font-size: .6875rem; font-weight: 500;
   color: var(--text-muted);
   background: #F1F5F9;
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: var(--r-full);
   flex-shrink: 0;
   margin-top: 3px;
@@ -535,9 +535,9 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   margin-top: 3px;
 }
 .q-text {
-  font-size: .9375rem; font-weight: 600;
+  font-size: 1.0625rem; font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.55;
   flex: 1;
 }
 .question-body { padding: var(--sp-4) var(--sp-5); }
@@ -855,4 +855,52 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
    ============================================================ */
 @media (min-width: 540px) {
   .login-card { box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,.12); }
+}
+
+/* ============================================================
+   系統使用說明卡片
+   ============================================================ */
+.instruction-card {
+  width: 100%; max-width: 420px;
+  margin-top: 24px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--r-xl);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+  animation: fadeUp .5s var(--ease);
+  position: relative;
+  z-index: 1;
+}
+.instruction-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.instruction-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.instruction-list li {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  position: relative;
+  padding-left: 14px;
+}
+.instruction-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #60A5FA;
+  font-weight: bold;
 }
