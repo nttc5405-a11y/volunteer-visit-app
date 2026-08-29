@@ -424,83 +424,158 @@
     card.querySelectorAll('input, textarea').forEach(el => { el.value = ''; });
   }
 
+  // ─── 自動建議規則表 ─────────────────────────────────────────
+  // 「某題答否 → 自動勾選對應的改善建議」。要調整連動，改這張表就好。
+  // suggest 的文字必須與題庫中該建議題的「選項內容」完全一致；
+  // 對不上時會自動略過並在瀏覽器主控台留下警告，
+  // 不會產生「畫面看不到、卻被送進試算表」的答案。
+  const SUGGESTION_RULES = [
+    {
+      visitType: '防火宣導',
+      target: 'F23',
+      map: [
+        { q: 'F02', suggest: ['更換合格瓦斯鋼瓶'] },        // 檢驗期限逾期
+        { q: 'F03', suggest: ['定期檢查瓦斯桶與皮管'] },    // 皮管龜裂老化
+        { q: 'F04', suggest: ['養成巡視並關閉火源習慣'] },  // 未隨手關瓦斯
+        { q: 'F05', suggest: ['簽訂瓦斯定型化契約'] },
+        { q: 'F08', suggest: ['定期檢查熱水器與配線'] },    // 無 CNS/TGAS 標示
+        { q: 'F09', suggest: ['定期檢查熱水器與配線'] },    // 裝設位置不通風
+        { q: 'F11', suggest: ['定期檢查插座與延長線'] },
+        { q: 'F12', suggest: ['定期檢查插座與延長線'] },
+        { q: 'F13', suggest: ['定期檢查插座與延長線'] },
+        { q: 'F14', suggest: ['養成巡視並關閉火源習慣'] },  // 神桌燈具/魚缸馬達
+        { q: 'F15', suggest: ['排煙機及排煙管定期清洗'] },
+        { q: 'F16', suggest: ['勿在逃生通道堆放雜物'] },
+        { q: 'F17', suggest: ['鐵窗預留出口並保持開啟'] },
+        { q: 'F19', suggest: ['訂定家庭逃生計畫'] },
+        { q: 'F22', suggest: ['定期檢查消防設備'] }         // 設備外觀性能不正常
+      ]
+    },
+    {
+      visitType: '防災宣導',
+      target: 'D18',
+      map: [
+        { q: 'D06', suggest: ['準備緊急避難包'] },
+        { q: 'D08', suggest: ['制定家庭避難逃生計畫'] },    // 不知避難收容所與路線
+        { q: 'D11', suggest: ['家具燈具盡可能固定'] },      // 未檢視居家環境安全
+        { q: 'D12', suggest: ['家具燈具盡可能固定'] },      // 大型傢俱未固定
+        { q: 'D13', suggest: ['養成巡視並關閉火源習慣'] },  // 不知應優先關閉電源火源
+        { q: 'D15', suggest: ['制定家庭避難逃生計畫'] }     // 不知空曠地點與疏散路線
+      ]
+    }
+  ];
+
+  // 記錄「由系統自動勾上」的項目，之後才知道哪些可以自動取消。
+  // 志工手動勾的項目不在此列，因此不會被系統擅自取消。
+  const autoTicked = {};
+
   // ─── 套用改善建議與了解程度等智慧邏輯規則 ───────────────────────
   function applyLogicalRules() {
     const selectedType = document.getElementById('visitType').value;
-    
-    if (selectedType === '防火宣導') {
-      if (!Array.isArray(answers['F23'])) {
-        answers['F23'] = [];
-      }
 
-      // Rule 1: F05 (定型化契約) 選「否」
-      if (answers['F05'] === '否') {
-        if (!answers['F23'].includes('定期檢查瓦斯桶與皮管')) answers['F23'].push('定期檢查瓦斯桶與皮管');
-        if (!answers['F23'].includes('簽訂瓦斯定型化契約')) answers['F23'].push('簽訂瓦斯定型化契約');
-      } else if (answers['F05'] === '是') {
-        answers['F23'] = answers['F23'].filter(v => v !== '簽訂瓦斯定型化契約');
-      }
+    SUGGESTION_RULES.forEach(rule => {
+      if (rule.visitType !== selectedType) return;
+      applySuggestionRule(rule);
+    });
 
-      // Rule 2: F16 (逃生通道無雜物) 選「否」
-      if (answers['F16'] === '否') {
-        if (!answers['F23'].includes('勿在逃生通道堆放雜物')) answers['F23'].push('勿在逃生通道堆放雜物');
-      } else if (answers['F16'] === '是') {
-        answers['F23'] = answers['F23'].filter(v => v !== '勿在逃生通道堆放雜物');
-      }
+    if (selectedType === '防火宣導') applyEquipmentRule();
+    if (selectedType === '防災宣導') applyDisasterGrade();
+  }
 
-      // Rule 3: F17 (鐵窗安全出口) 選「否」
-      if (answers['F17'] === '否') {
-        if (!answers['F23'].includes('鐵窗預留出口並保持開啟')) answers['F23'].push('鐵窗預留出口並保持開啟');
-      } else if (answers['F17'] === '是') {
-        answers['F23'] = answers['F23'].filter(v => v !== '鐵窗預留出口並保持開啟');
-      }
+  // 依規則表計算某一題（F23／D18）應自動勾選的建議
+  function applySuggestionRule(rule) {
+    const target = rule.target;
+    const targetQ = questions.find(q => q.id === target);
+    if (!targetQ) return;
 
-      // Rule 4: F19 (家庭逃生計畫) 選「否」
-      if (answers['F19'] === '否') {
-        if (!answers['F23'].includes('訂定家庭逃生計畫')) answers['F23'].push('訂定家庭逃生計畫');
-      } else if (answers['F19'] === '是') {
-        answers['F23'] = answers['F23'].filter(v => v !== '訂定家庭逃生計畫');
-      }
+    if (!Array.isArray(answers[target])) answers[target] = [];
+    if (!(target in autoTicked)) autoTicked[target] = [];
 
-      // Rule 5: F20 (消防設備) 選「否」，或擁有設備不全
-      const hasEquipment = answers['F20'] === '是';
-      const eqList = answers['F21'] || [];
-      const hasAlarm = eqList.includes('住宅用火災警報器');
-      const hasLight = eqList.includes('緊急照明燈');
-      
-      if (answers['F20'] === '否' || (hasEquipment && (!hasAlarm || !hasLight))) {
-        if (!answers['F23'].includes('購設消防設備')) answers['F23'].push('購設消防設備');
-      } else if (answers['F20'] === '是' && hasAlarm && hasLight) {
-        answers['F23'] = answers['F23'].filter(v => v !== '購設消防設備');
-      }
-    }
-
-    if (selectedType === '防災宣導') {
-      const disasterQids = ['D01','D02','D03','D04','D05','D06','D07','D08','D09','D10','D11','D12','D13','D14','D15','D16'];
-      
-      let noCount = 0;
-      let answeredCount = 0;
-      disasterQids.forEach(qid => {
-        if (answers[qid]) {
-          answeredCount++;
-          if (answers[qid] === '否') {
-            noCount++;
-          }
+    // 目前應該被自動勾選的項目 = 所有觸發題答「否」的建議
+    const wanted = [];
+    rule.map.forEach(item => {
+      if (answers[item.q] !== '否') return;
+      item.suggest.forEach(s => {
+        if (wanted.indexOf(s) !== -1) return;
+        if (targetQ.options.indexOf(s) === -1) {
+          console.warn('[連動規則] 題庫的「' + target + '」沒有這個選項，已略過：' + s);
+          return;
         }
+        wanted.push(s);
       });
+    });
 
-      if (answeredCount > 0) {
-        if (noCount <= 3) {
-          answers['D17'] = '了解(答否3項以下)';
-        } else if (noCount <= 5) {
-          answers['D17'] = '尚可(答否4項以下)';
-        } else {
-          answers['D17'] = '不了解(答否6項以上)';
-        }
-      } else {
-        delete answers['D17'];
-      }
+    // 取消「先前由系統勾上、但現在條件已不成立」的項目
+    autoTicked[target] = autoTicked[target].filter(v => {
+      if (wanted.indexOf(v) !== -1) return true;
+      answers[target] = answers[target].filter(x => x !== v);
+      return false;
+    });
+
+    // 補上新的自動建議（志工已手動勾選的不重複記為自動）
+    wanted.forEach(s => {
+      if (answers[target].indexOf(s) !== -1) return;
+      answers[target].push(s);
+      autoTicked[target].push(s);
+    });
+  }
+
+  // 消防設備規則：沒有設備、或設備不齊全時建議購設
+  // （F20 答「是」但 F21 尚未作答時先不判斷，避免一選「是」就跳出「購設消防設備」）
+  function applyEquipmentRule() {
+    const target = 'F23';
+    const suggestion = '購設消防設備';
+    const targetQ = questions.find(q => q.id === target);
+    if (!targetQ || targetQ.options.indexOf(suggestion) === -1) return;
+
+    if (!Array.isArray(answers[target])) answers[target] = [];
+    if (!(target in autoTicked)) autoTicked[target] = [];
+
+    const eqList = Array.isArray(answers['F21']) ? answers['F21'] : [];
+    let needed = null;                                   // null = 條件不足，維持現狀
+
+    if (answers['F20'] === '否') {
+      needed = true;
+    } else if (answers['F20'] === '是' && eqList.length > 0) {
+      needed = !(eqList.indexOf('住宅用火災警報器') !== -1 &&
+                 eqList.indexOf('緊急照明燈') !== -1);
     }
+
+    if (needed === true && answers[target].indexOf(suggestion) === -1) {
+      answers[target].push(suggestion);
+      if (autoTicked[target].indexOf(suggestion) === -1) autoTicked[target].push(suggestion);
+    } else if (needed === false && autoTicked[target].indexOf(suggestion) !== -1) {
+      answers[target] = answers[target].filter(v => v !== suggestion);
+      autoTicked[target] = autoTicked[target].filter(v => v !== suggestion);
+    }
+  }
+
+  // 災害了解程度（D17）：依防災是否題答「否」的題數自動評定。
+  // 以「了解／尚可／不了解」開頭比對題庫選項，因此選項文字可隨時修改而不影響判定。
+  function applyDisasterGrade() {
+    const gradeQ = questions.find(q => q.id === 'D17');
+    if (!gradeQ || gradeQ.options.length < 3) return;
+
+    // 納入計算的題目 = 所有防災宣導的是否題（新增題目會自動被算進來）
+    const disasterQids = questions
+      .filter(q => q.visitType === '防災宣導' && q.type === '是否題')
+      .map(q => q.id);
+
+    let noCount = 0, answeredCount = 0;
+    disasterQids.forEach(qid => {
+      if (!answers[qid]) return;
+      answeredCount++;
+      if (answers[qid] === '否') noCount++;
+    });
+
+    if (answeredCount === 0) { delete answers['D17']; return; }
+
+    const pick = (prefix, fallbackIndex) =>
+      gradeQ.options.find(o => o.indexOf(prefix) === 0) || gradeQ.options[fallbackIndex];
+
+    if (noCount <= 3)      answers['D17'] = pick('了解', 0);
+    else if (noCount <= 5) answers['D17'] = pick('尚可', 1);
+    else                   answers['D17'] = pick('不了解', 2);
   }
 
   // ─── 將 answers 的最新狀態同步至 DOM 畫面 ───────────────────────
