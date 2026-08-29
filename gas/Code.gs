@@ -93,27 +93,147 @@ function getQuestions() {
   if (!sheet) return { success: false, error: '找不到「訪視題庫」工作表，請先執行初始化腳本。' };
 
   var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { success: true, data: [] };
+
+  // 依標題列名稱定位欄位，日後在題庫增減欄位不影響此處邏輯
+  var col = mapQuestionColumns_(data[0]);
   var questions = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (!row[0]) continue;
+    if (!row[col.id]) continue;
+    if (!isQuestionEnabled_(row, col)) continue;  // 「啟用」欄填 FALSE 的題目不出現在表單
 
     questions.push({
-      id:         String(row[0]).trim(),
-      visitType:  String(row[1]).trim(),
-      dependency: String(row[2]).trim(),
-      category:   String(row[3]).trim(),
-      content:    String(row[4]).trim(),
-      type:       String(row[5]).trim(),
-      options:    row[6]
-        ? String(row[6]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
+      id:         String(row[col.id]).trim(),
+      visitType:  String(row[col.visitType]).trim(),
+      dependency: String(row[col.dependency]).trim(),
+      category:   String(row[col.category]).trim(),
+      content:    String(row[col.content]).trim(),
+      type:       String(row[col.type]).trim(),
+      options:    row[col.options]
+        ? String(row[col.options]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
         : [],
-      required:   row[7] === true || String(row[7]).toUpperCase() === 'TRUE'
+      required:   row[col.required] === true || String(row[col.required]).toUpperCase() === 'TRUE'
     });
   }
 
   return { success: true, data: questions };
+}
+
+// ============================================================
+// 題庫 = 唯一真相來源：以下輔助函式讓「新增／調整題目」
+// 只需要在「訪視題庫」工作表操作，不必修改程式碼。
+// ============================================================
+
+// 「訪視紀錄表」的固定基本欄位（答案欄以外的欄位）
+var BASE_RECORD_HEADERS = [
+  '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
+  '所屬分隊', '案家姓名', '案家性別', '案家電話', '案家地址', 'GPS定位座標',
+  '房屋屋齡', '住宅形式', '總樓層', '居住樓層', '建築結構',
+  '家庭總人數', '家庭65歲以上人數', '家庭行動不便人數', '家庭6歲以下人數', '家庭外籍人士人數',
+  '受訪者簽名'
+];
+
+// 訪視題庫標題列 → 欄位索引（找不到的欄位沿用原本的固定位置，相容舊試算表）
+function mapQuestionColumns_(headerRow) {
+  var col = {
+    id: 0, visitType: 1, dependency: 2, category: 3,
+    content: 4, type: 5, options: 6, required: 7, enabled: -1
+  };
+  var names = {
+    '題目代碼': 'id',      '訪視類型': 'visitType', '依賴條件': 'dependency',
+    '題目分類': 'category', '題目內容': 'content',   '題型':     'type',
+    '選項內容': 'options',  '必填':     'required',  '啟用':     'enabled'
+  };
+
+  for (var c = 0; c < headerRow.length; c++) {
+    var key = names[String(headerRow[c]).trim()];
+    if (key) col[key] = c;
+  }
+  return col;
+}
+
+// 「啟用」欄：留空或 TRUE 視為啟用（舊試算表沒有此欄時一律視為啟用）
+function isQuestionEnabled_(row, col) {
+  if (col.enabled < 0) return true;
+  var v = row[col.enabled];
+  if (v === '' || v === null || v === undefined) return true;
+  if (v === false) return false;
+  return String(v).toUpperCase() !== 'FALSE';
+}
+
+// 判斷標題是否為題目答案欄（題目代碼格式：1~3 個英文字母 + 數字，例 F01、D18、F25）
+function isAnswerColumn_(name) {
+  return /^[A-Za-z]{1,3}\d{1,3}$/.test(String(name).trim());
+}
+
+// 取得題庫全部題目代碼（含已停用者：欄位保留才不會弄丟歷史資料）
+function getQuestionCodes_(ss) {
+  var qSheet = ss.getSheetByName('訪視題庫');
+  if (!qSheet) return [];
+
+  var qData = qSheet.getDataRange().getValues();
+  if (qData.length <= 1) return [];
+
+  var col   = mapQuestionColumns_(qData[0]);
+  var codes = [];
+
+  for (var i = 1; i < qData.length; i++) {
+    var code = String(qData[i][col.id] || '').trim();
+    if (code && codes.indexOf(code) === -1) codes.push(code);
+  }
+  return codes;
+}
+
+// 讓目標工作表具備 mainHeaders 的所有欄位（依「欄位名稱」比對，缺少的補在最後）。
+// 用於把主表的欄位同步到各分隊專屬試算表。
+// 回傳目標工作表同步後的標題列陣列。
+function syncHeadersByName_(sheet, mainHeaders) {
+  var lastCol = sheet.getLastColumn();
+  var headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  var missing = [];
+
+  mainHeaders.forEach(function(h) {
+    var name = String(h).trim();
+    if (!name) return;
+    for (var i = 0; i < headers.length; i++) {
+      if (String(headers[i]).trim() === name) return;
+    }
+    if (missing.indexOf(name) === -1) missing.push(name);
+  });
+
+  if (missing.length > 0) {
+    sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
+    Logger.log('已於「' + sheet.getName() + '」補上欄位：' + missing.join('、'));
+  }
+
+  return headers;
+}
+
+// 確保工作表已含題庫所有題目代碼欄位，缺少的自動補在最後。
+// 回傳同步後的標題列陣列。
+function ensureAnswerColumns_(sheet, codes) {
+  var lastCol = sheet.getLastColumn();
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var missing = [];
+
+  codes.forEach(function(code) {
+    for (var i = 0; i < headers.length; i++) {
+      if (String(headers[i]).trim() === code) return;
+    }
+    if (missing.indexOf(code) === -1) missing.push(code);
+  });
+
+  if (missing.length > 0) {
+    sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
+    _styleHeader(sheet, headers.length);
+    Logger.log('已於「' + sheet.getName() + '」補上欄位：' + missing.join('、'));
+  }
+
+  return headers;
 }
 
 // ============================================================
@@ -336,54 +456,53 @@ function submitForm(record) {
     }
   }
 
-  // 取得題庫順序，確保答案欄位對齊
-  var qSheet = ss.getSheetByName('訪視題庫');
-  var questionIds = [];
-  if (qSheet) {
-    var qData = qSheet.getDataRange().getValues();
-    for (var i = 1; i < qData.length; i++) {
-      if (qData[i][0]) questionIds.push(String(qData[i][0]).trim());
-    }
-  }
+  // 題庫若新增了題目，先自動補上對應欄位（漏點選單也不會掉資料）
+  var headers = ensureAnswerColumns_(sheet, getQuestionCodes_(ss));
 
-  // 組合列資料
-  var rowData = [
-    id,
-    new Date(),                       // 填報時間
-    record.visitDate || '',           // 訪視日期
-    record.visitType || '',           // 訪視類型
-    record.submitter || '',
-    Array.isArray(record.teamMembers)
+  // 基本欄位值（以「欄位名稱」為鍵）
+  var baseValues = {
+    '流水號':   id,
+    '填報時間': new Date(),
+    '訪視日期': record.visitDate  || '',
+    '訪視類型': record.visitType  || '',
+    '主填寫人姓名': record.submitter || '',
+    '協同志工': Array.isArray(record.teamMembers)
       ? record.teamMembers.join(',')
       : (record.teamMembers || ''),
-    record.branch    || '',
-    record.clientName || '',
-    record.clientGender || '',        // 案家性別
-    record.clientPhone || '',
-    record.clientAddress || '',
-    record.gps       || '',           // GPS定位座標
-    record.houseAge !== undefined ? String(record.houseAge) : '', // 房屋屋齡
-    record.residentialType || '',     // 住宅形式
-    record.totalFloors !== undefined ? String(record.totalFloors) : '', // 總樓層
-    record.residingFloor !== undefined ? String(record.residingFloor) : '', // 居住樓層
-    record.buildingStructure || '',   // 建築結構
-    record.familySize !== undefined ? String(record.familySize) : '', // 家庭總人數
-    record.family65Plus !== undefined ? String(record.family65Plus) : '', // 65歲以上
-    record.familyDisabled !== undefined ? String(record.familyDisabled) : '', // 行動不便
-    record.familyUnder6 !== undefined ? String(record.familyUnder6) : '', // 6歲以下
-    record.familyForeigner !== undefined ? String(record.familyForeigner) : '', // 外籍人士
-    signatureUrl                      // 受訪者簽名
-  ];
+    '所屬分隊':   record.branch        || '',
+    '案家姓名':   record.clientName    || '',
+    '案家性別':   record.clientGender  || '',
+    '案家電話':   record.clientPhone   || '',
+    '案家地址':   record.clientAddress || '',
+    'GPS定位座標': record.gps          || '',
+    '房屋屋齡':   record.houseAge          !== undefined ? String(record.houseAge) : '',
+    '住宅形式':   record.residentialType   || '',
+    '總樓層':     record.totalFloors       !== undefined ? String(record.totalFloors) : '',
+    '居住樓層':   record.residingFloor     !== undefined ? String(record.residingFloor) : '',
+    '建築結構':   record.buildingStructure || '',
+    '家庭總人數': record.familySize        !== undefined ? String(record.familySize) : '',
+    '家庭65歲以上人數': record.family65Plus    !== undefined ? String(record.family65Plus) : '',
+    '家庭行動不便人數': record.familyDisabled  !== undefined ? String(record.familyDisabled) : '',
+    '家庭6歲以下人數':  record.familyUnder6    !== undefined ? String(record.familyUnder6) : '',
+    '家庭外籍人士人數': record.familyForeigner !== undefined ? String(record.familyForeigner) : '',
+    '受訪者簽名': signatureUrl
+  };
 
-  // 依題目順序附加答案
+  // 逐欄對照「欄位名稱」填值：答案不再依題庫列順序排列，
+  // 因此題庫可自由拖曳排序、於中間插入新題目而不會錯位。
   var answers = record.answers || {};
-  questionIds.forEach(function(qid) {
-    var ans = answers[qid];
-    if (Array.isArray(ans)) {
-      rowData.push(ans.join(','));
-    } else {
-      rowData.push(ans !== undefined ? String(ans) : '');
+  var rowData = headers.map(function(h) {
+    var name = String(h).trim();
+
+    if (baseValues.hasOwnProperty(name)) return baseValues[name];
+
+    if (isAnswerColumn_(name)) {
+      var ans = answers[name];
+      if (Array.isArray(ans)) return ans.join(',');
+      return (ans !== undefined && ans !== null) ? String(ans) : '';
     }
+
+    return '';
   });
 
   sheet.appendRow(rowData);
@@ -419,23 +538,36 @@ function splitToBranch(record, id) {
     }
 
     try {
-      var subSS    = SpreadsheetApp.openById(subSheetId);
-      var subSheet = subSS.getSheetByName('訪視紀錄');
+      var subSS     = SpreadsheetApp.openById(subSheetId);
+      var subSheet  = subSS.getSheetByName('訪視紀錄');
+      var mainSheet = ss.getSheetByName('訪視紀錄表');
+      var mainHeaders = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
 
       // 若分隊表尚無此工作表則自動建立並複製標題列
       if (!subSheet) {
         subSheet = subSS.insertSheet('訪視紀錄');
-        var mainSheet   = ss.getSheetByName('訪視紀錄表');
-        var headerRange = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn());
-        subSheet.appendRow(headerRange.getValues()[0]);
+        subSheet.appendRow(mainHeaders);
       }
 
-      // 找到剛寫入的那一列並複製
-      var mainSheet = ss.getSheetByName('訪視紀錄表');
-      var mainData  = mainSheet.getDataRange().getValues();
+      // 主表新增題目欄位後，分隊表標題列一併補齊（依欄位名稱比對，
+      // 分隊自行加過的欄位不會被覆蓋或誤判為已同步）
+      var subHeaders = syncHeadersByName_(subSheet, mainHeaders);
+
+      // 找到剛寫入的那一列，依「欄位名稱」對應後再寫入分隊表，
+      // 分隊表的欄位順序與主表不同也不會錯位
+      var mainData = mainSheet.getDataRange().getValues();
       for (var j = 1; j < mainData.length; j++) {
         if (String(mainData[j][0]) === String(id)) {
-          subSheet.appendRow(mainData[j]);
+          var valueByName = {};
+          for (var k = 0; k < mainHeaders.length; k++) {
+            valueByName[String(mainHeaders[k]).trim()] = mainData[j][k];
+          }
+
+          subSheet.appendRow(subHeaders.map(function(h) {
+            var name = String(h).trim();
+            return valueByName.hasOwnProperty(name) ? valueByName[name] : '';
+          }));
+
           Logger.log('已同步紀錄 #' + id + ' → 分隊「' + record.branch + '」');
           break;
         }
@@ -474,19 +606,12 @@ function getDashboardData() {
     if (!id) continue;
 
     var answers = {};
-    
-    // 將 F01~F24, D01~D18 問卷回答加入 answers 物件
-    for (var f = 1; f <= 24; f++) {
-      var fid = 'F' + String(f).padStart(2, '0');
-      if (colIdx[fid] !== undefined) {
-        answers[fid] = row[colIdx[fid]];
-      }
-    }
-    for (var d = 1; d <= 18; d++) {
-      var did = 'D' + String(d).padStart(2, '0');
-      if (colIdx[did] !== undefined) {
-        answers[did] = row[colIdx[did]];
-      }
+
+    // 掃描標題列中所有題目答案欄（F01、D18、F25…）
+    // 新增題目時不需要修改這段程式
+    for (var c = 0; c < headers.length; c++) {
+      var h = String(headers[c]).trim();
+      if (isAnswerColumn_(h)) answers[h] = row[c];
     }
 
     // 格式化日期防止 json 解析出錯

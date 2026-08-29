@@ -3,9 +3,10 @@
  *
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  可執行的函式列表：                                           ║
- * ║  1. initializeSheets()   → 建立主資料庫的 4 張工作表          ║
- * ║  2. createBranchSheets() → 自動建立 3 個分隊專屬試算表        ║
- * ║  3. resetAllSheets()     → 重置所有資料（謹慎使用）           ║
+ * ║  1. initializeSheets()     → 建立主資料庫的 4 張工作表        ║
+ * ║  2. createBranchSheets()   → 自動建立 3 個分隊專屬試算表      ║
+ * ║  3. syncQuestionColumns()  → 題庫增減題目後同步紀錄表欄位     ║
+ * ║  4. resetAllSheets()       → 重置所有資料（謹慎使用）         ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
  * ===== 使用方式 =====
@@ -17,15 +18,102 @@
  */
 
 // ============================================================
-// 主初始化函式（執行此函式）
+// 開啟試算表時建立自訂選單
+// ============================================================
+// 選單只放「安全、可重複執行」的功能。
+// initializeSheets / resetAllSheets 會清空資料，刻意不放進選單，
+// 必須到 Apps Script 編輯器選擇函式才能執行，以免誤點。
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('志工訪視系統')
+    .addItem('🔄 同步題庫欄位', 'syncQuestionColumns')
+    .addToUi();
+}
+
+// ============================================================
+// 同步題庫欄位
+//
+// 在「訪視題庫」新增題目後，點此把題目代碼補成
+// 「訪視紀錄表」與各分隊試算表的欄位。
+// 只會新增欄位，不會刪除或搬移既有欄位與資料。
+// ============================================================
+function syncQuestionColumns() {
+  var ss     = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet  = ss.getSheetByName('訪視紀錄表');
+  var ui     = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+
+  if (!sheet) {
+    if (ui) ui.alert('❌ 找不到「訪視紀錄表」，請先執行初始化。');
+    return;
+  }
+
+  var codes  = getQuestionCodes_(ss);
+  if (codes.length === 0) {
+    if (ui) ui.alert('❌ 「訪視題庫」沒有任何題目，請先確認題庫內容。');
+    return;
+  }
+
+  var before  = sheet.getLastColumn();
+  var headers = ensureAnswerColumns_(sheet, codes);
+  var added   = headers.length - before;
+
+  // 一併同步各分隊專屬試算表的標題列
+  var branchResults = [];
+  var branchSheet   = ss.getSheetByName('分隊對照表');
+
+  if (branchSheet) {
+    var branchData = branchSheet.getDataRange().getValues();
+
+    for (var i = 1; i < branchData.length; i++) {
+      var branchName = String(branchData[i][0]).trim();
+      var subSheetId = String(branchData[i][2]).trim();
+      if (!branchName || !subSheetId) continue;
+
+      try {
+        var subSheet = SpreadsheetApp.openById(subSheetId).getSheetByName('訪視紀錄');
+        if (!subSheet) {
+          branchResults.push('• ' + branchName + '：查無「訪視紀錄」工作表，志工首次送出時會自動建立');
+          continue;
+        }
+
+        var subBefore = subSheet.getLastColumn();
+        var subAfter  = syncHeadersByName_(subSheet, headers).length;
+
+        branchResults.push(subAfter > subBefore
+          ? '• ' + branchName + '：補上 ' + (subAfter - subBefore) + ' 欄'
+          : '• ' + branchName + '：已是最新');
+      } catch (err) {
+        branchResults.push('• ' + branchName + '：同步失敗（' + err.message + '）');
+        Logger.log('分隊標題同步失敗（' + branchName + '）：' + err.toString());
+      }
+    }
+  }
+
+  var msg = added > 0
+    ? '✅ 已於「訪視紀錄表」新增 ' + added + ' 個題目欄位。'
+    : '✅ 欄位皆已是最新，未新增任何欄位。';
+
+  if (branchResults.length > 0) {
+    msg += '\n\n分隊試算表：\n' + branchResults.join('\n');
+  }
+  msg += '\n\n提醒：修改題庫後不需要重新部署 Web App，志工端下次載入表單即會更新。';
+
+  Logger.log(msg);
+  if (ui) ui.alert(msg);
+}
+
+// ============================================================
+// 初始化所有工作表
 // ============================================================
 function initializeSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  // 題庫必須先建立：訪視紀錄表的答案欄位是依題庫的題目代碼自動產生
+  _createQuestionSheet(ss);
   _createVisitRecordSheet(ss);
   _createMemberSheet(ss);
   _createBranchSheet(ss);
-  _createQuestionSheet(ss);
 
   // 刪除預設的 "工作表1"（如存在）
   var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
@@ -62,22 +150,9 @@ function _createVisitRecordSheet(ss) {
     sheet.clearFormats();
   }
 
-  // 先定義基本欄位
-  var headers = [
-    '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
-    '所屬分隊', '案家姓名', '案家性別', '案家電話', '案家地址', 'GPS定位座標',
-    '房屋屋齡', '住宅形式', '總樓層', '居住樓層', '建築結構',
-    '家庭總人數', '家庭65歲以上人數', '家庭行動不便人數', '家庭6歲以下人數', '家庭外籍人士人數',
-    '受訪者簽名'
-  ];
-  
-  // 動態把 F01~F24, D01~D18 加入標頭
-  for (var f = 1; f <= 24; f++) {
-    headers.push('F' + String(f).padStart(2, '0'));
-  }
-  for (var d = 1; d <= 18; d++) {
-    headers.push('D' + String(d).padStart(2, '0'));
-  }
+  // 基本欄位 + 題庫的所有題目代碼（答案欄一律由「訪視題庫」自動產生，
+  // 因此新增題目後只需執行選單的「同步題庫欄位」即可，不必改程式）
+  var headers = BASE_RECORD_HEADERS.concat(getQuestionCodes_(ss));
 
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
@@ -214,27 +289,48 @@ function _createQuestionSheet(ss) {
     sheet.clearFormats();
   }
 
-  var headers = ['題目代碼', '訪視類型', '依賴條件', '題目分類', '題目內容', '題型', '選項內容', '必填'];
+  var headers = ['題目代碼', '訪視類型', '依賴條件', '題目分類', '題目內容', '題型', '選項內容', '必填', '啟用'];
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
   sheet.setFrozenRows(1);
 
-  // 題型說明備註
+  // 欄位說明備註
+  sheet.getRange('A1').setNote(
+    '題目代碼即「訪視紀錄表」的欄位名稱，\n' +
+    '一旦使用過就不要改名或重複使用，\n' +
+    '否則會對不到歷史資料。\n' +
+    '新增題目可直接沿用下一個號碼（例 F25）。'
+  );
+  sheet.getRange('C1').setNote(
+    '格式：題目代碼=答案（例 F01=是），\n' +
+    '該題答成此答案時才會顯示本題。\n' +
+    '目前僅支援單一條件，不支援「且／或」。'
+  );
   sheet.getRange('F1').setNote(
-    '支援題型：\n是否題 / 單選題 / 複選題 / 簡答題'
+    '支援題型：\n是否題 / 單選題 / 複選題 / 簡答題 / 日期題 / 數字題'
   );
   sheet.getRange('G1').setNote(
-    '選項內容以半形逗號「,」分隔\n簡答題此欄留空'
+    '選項內容以半形逗號「,」分隔\n簡答題、日期題、數字題此欄留空'
   );
   sheet.getRange('H1').setNote(
     '填 TRUE 表必填（前端驗證），\n填 FALSE 或空白表選填'
   );
+  sheet.getRange('I1').setNote(
+    '填 FALSE 表停用：該題不再出現於表單，\n' +
+    '但紀錄表欄位與歷史資料完整保留。\n' +
+    '留空或 TRUE 表啟用。\n' +
+    '【停用題目請用此欄，不要直接刪列】'
+  );
+
+  // 題目列的顯示順序 = 表單上的出題順序，可直接在試算表拖曳列調整。
+  // 答案是以「題目代碼」對應欄位寫入，因此調整順序或於中間插入新題目都不會錯位。
 
   // 防火/防災宣導 題目資料庫
   var questions = [
     // === 防火宣導 (F01 ~ F24) ===
     ['F01', '防火宣導', '', '瓦斯安全', '家中是否使用桶裝瓦斯？', '是否題', '是,未使用', true],
     ['F02', '防火宣導', 'F01=是', '瓦斯安全', '瓦斯桶檢驗期限是否合格無逾期？', '是否題', '是,否', false],
+    ['F25', '防火宣導', 'F01=是', '瓦斯安全', '瓦斯桶下次檢驗日期（依鋼瓶鋼印年月推算）', '日期題', '', false],
     ['F03', '防火宣導', 'F01=是', '瓦斯安全', '瓦斯桶外觀及皮管是否有定期檢查，無龜裂、老化、鬆脫、腐蝕或變形現象？', '是否題', '是,否', false],
     ['F04', '防火宣導', 'F01=是', '瓦斯安全', '使用瓦斯完畢後是否有隨手關緊開關之習慣？', '是否題', '是,否', false],
     ['F05', '防火宣導', 'F01=是', '瓦斯安全', '是否有與瓦斯業者簽訂液化石油氣定型化契約？', '是否題', '是,否', false],
@@ -279,7 +375,8 @@ function _createQuestionSheet(ss) {
     ['D18', '防災宣導', '', '改善建議', '防災改善建議事項 (可多選)', '複選題', '制定家庭避難逃生計畫,家具燈具盡可能固定,養成巡視並關閉火源習慣,勿在逃生通道堆放雜物,準備緊急避難包,其他建議', false]
   ];
 
-  questions.forEach(function(row) { sheet.appendRow(row); });
+  // 預設題目一律為啟用狀態（第 9 欄「啟用」）
+  questions.forEach(function(row) { sheet.appendRow(row.concat([true])); });
 
   sheet.setColumnWidth(1, 80);
   sheet.setColumnWidth(2, 90);
@@ -289,6 +386,7 @@ function _createQuestionSheet(ss) {
   sheet.setColumnWidth(6, 80);
   sheet.setColumnWidth(7, 220);
   sheet.setColumnWidth(8, 60);
+  sheet.setColumnWidth(9, 60);
 
   Logger.log('✓ 訪視題庫 建立完成（' + questions.length + ' 題）');
 }
@@ -349,15 +447,8 @@ function createBranchSheets() {
   if (mainRecordSheet) {
     mainHeaders = mainRecordSheet.getRange(1, 1, 1, mainRecordSheet.getLastColumn()).getValues()[0];
   } else {
-    mainHeaders = [
-      '流水號', '填報時間', '訪視日期', '訪視類型', '主填寫人姓名', '協同志工',
-      '所屬分隊', '案家姓名', '案家性別', '案家電話', '案家地址', 'GPS定位座標',
-      '房屋屋齡', '住宅形式', '總樓層', '居住樓層', '建築結構',
-      '家庭總人數', '家庭65歲以上人數', '家庭行動不便人數', '家庭6歲以下人數', '家庭外籍人士人數',
-      '受訪者簽名'
-    ];
-    for (var f = 1; f <= 24; f++) mainHeaders.push('F' + String(f).padStart(2, '0'));
-    for (var d = 1; d <= 18; d++) mainHeaders.push('D' + String(d).padStart(2, '0'));
+    // 主表尚未建立時，改由題庫推導答案欄位
+    mainHeaders = BASE_RECORD_HEADERS.concat(getQuestionCodes_(mainSS));
   }
 
   // 逐列處理分隊

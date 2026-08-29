@@ -412,10 +412,16 @@
         } else {
           card.classList.add('hidden');
           delete answers[q.id]; // 隱藏時清空答案
+          clearQuestionInputs(card); // 一併清掉輸入框殘值，避免下次顯示時留下舊資料
           markAnswered(q.id, false);
         }
       }
     });
+  }
+
+  // ─── 清空題目卡片內的輸入框（日期題／數字題／簡答題）─────────────
+  function clearQuestionInputs(card) {
+    card.querySelectorAll('input, textarea').forEach(el => { el.value = ''; });
   }
 
   // ─── 套用改善建議與了解程度等智慧邏輯規則 ───────────────────────
@@ -533,7 +539,13 @@
       }
     });
 
-    // 4. 對所有題目卡片更新 answered 樣式
+    // 4. 同步日期題 / 數字題輸入值
+    document.querySelectorAll('.q-date-input, .q-num-input').forEach(inp => {
+      const qid = inp.id.replace(/^(dt|nb)-/, '');
+      inp.value = answers[qid] !== undefined ? answers[qid] : '';
+    });
+
+    // 5. 對所有題目卡片更新 answered 樣式
     questions.forEach(q => {
       const ans = answers[q.id];
       const isDone = Array.isArray(ans) ? ans.length > 0 : ans && String(ans).trim();
@@ -660,6 +672,25 @@
                     aria-label="${q.content}"
                     oninput="handleTextAnswer('${q.id}', this.value)"></textarea>`;
 
+      case '日期題':
+        return `
+          <input type="date"
+                 class="form-input q-date-input"
+                 id="dt-${q.id}"
+                 aria-label="${q.content}"
+                 onchange="handleTextAnswer('${q.id}', this.value)">`;
+
+      case '數字題':
+        return `
+          <input type="number"
+                 class="form-input q-num-input"
+                 id="nb-${q.id}"
+                 inputmode="numeric"
+                 min="0"
+                 placeholder="請輸入數字"
+                 aria-label="${q.content}"
+                 oninput="handleTextAnswer('${q.id}', this.value)">`;
+
       default:
         return `<p class="text-muted text-sm">⚠️ 不支援的題型：${q.type}</p>`;
     }
@@ -723,7 +754,8 @@
   // ─── 標記題目卡片已/未作答 ──────────────────────────────────
   function markAnswered(qid, isDone) {
     const card = document.getElementById(`qcard-${qid}`);
-    if (card) card.classList.toggle('answered', isDone);
+    // 必須轉成布林：classList.toggle 收到 undefined 會變成「反向切換」而非「移除」
+    if (card) card.classList.toggle('answered', !!isDone);
   }
 
   // ─── GPS 定位 ────────────────────────────────────────────────
