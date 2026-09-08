@@ -16,9 +16,17 @@
       <div class="top-bar-title">🏠 居家訪視紀錄</div>
       <div class="top-bar-subtitle" id="userInfo">載入中...</div>
     </div>
-    <button class="back-btn" onclick="handleLogout()" aria-label="登出系統">
-      ← 登出
-    </button>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <!-- 僅管理員與分隊承辦人可見，於初始化時判斷角色後顯示 -->
+      <button class="back-btn hidden" id="dashboardBtn"
+              onclick="window.location.href='dashboard.html'"
+              aria-label="開啟數據分析儀表板">
+        📊 統計
+      </button>
+      <button class="back-btn" onclick="handleLogout()" aria-label="登出系統">
+        ← 登出
+      </button>
+    </div>
   </div>
   <!-- 進度條 -->
   <div class="progress-bar" role="progressbar" aria-label="填寫進度"
@@ -260,6 +268,12 @@
 
     document.getElementById('userInfo').textContent =
       `${session.name}｜${session.branch}`;
+
+    // 統計儀表板含案家個資，僅管理員與分隊承辦人顯示入口
+    const role = String(session.role || '志工').trim();
+    if (role === '管理員' || role === '分隊承辦人') {
+      document.getElementById('dashboardBtn').classList.remove('hidden');
+    }
 
     // 訪視日期預設今日
     const today = new Date();
