@@ -991,6 +991,18 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .kpi-card.success { border-left-color: var(--c-success); }
 .kpi-card.warning { border-left-color: var(--c-warning); }
 .kpi-card.info    { border-left-color: var(--c-primary-light); }
+.kpi-card.danger  { border-left-color: var(--c-danger); }
+
+/* 名單表格：欄位不折成直排，過寬時整張表橫向捲動 */
+#listBody td, #listSection thead th { white-space: nowrap; }
+#listBody td:nth-child(8) { white-space: normal; min-width: 220px; }
+
+/* 可點擊展開名單的指標卡 */
+.kpi-card.action-card { cursor: pointer; }
+.kpi-card.action-card:focus-visible {
+  outline: 3px solid var(--c-primary-light);
+  outline-offset: 2px;
+}
 
 .kpi-val {
   font-size: 1.875rem;

@@ -43,6 +43,36 @@
       <span id="dataNoticeText">系統目前正以「模擬演示數據」渲染，以展示完整報表成效。</span>
     </div>
 
+    <!-- ─── 篩選列 ─── -->
+    <section class="chart-card" style="margin-bottom:20px;">
+      <div style="padding:14px 16px; display:flex; flex-wrap:wrap; gap:12px 16px; align-items:flex-end;">
+        <div>
+          <label class="form-label" for="filterFrom" style="font-size:0.78rem;">起始日期</label>
+          <input type="date" class="form-input" id="filterFrom" onchange="applyFilters()" style="width:auto;">
+        </div>
+        <div>
+          <label class="form-label" for="filterTo" style="font-size:0.78rem;">結束日期</label>
+          <input type="date" class="form-input" id="filterTo" onchange="applyFilters()" style="width:auto;">
+        </div>
+        <div>
+          <label class="form-label" for="filterBranch" style="font-size:0.78rem;">分隊</label>
+          <select class="dashboard-select" id="filterBranch" onchange="applyFilters()" style="width:auto;">
+            <option value="">全部分隊</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label" for="filterType" style="font-size:0.78rem;">宣導類型</label>
+          <select class="dashboard-select" id="filterType" onchange="applyFilters()" style="width:auto;">
+            <option value="">全部類型</option>
+            <option value="防火宣導">防火宣導</option>
+            <option value="防災宣導">防災宣導</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="resetFilters()">重設</button>
+        <div style="margin-left:auto; font-size:0.8rem; color:var(--text-muted); font-weight:600;" id="filterSummary"></div>
+      </div>
+    </section>
+
     <!-- ─── 關鍵指標區 KPI Cards Grid ─── -->
     <section class="dashboard-grid" aria-label="關鍵指標">
       
@@ -82,6 +112,98 @@
         <div class="kpi-icon" aria-hidden="true">🏚️</div>
       </div>
 
+    </section>
+
+    <!-- ─── 待處理家戶：可直接交給分隊執行的工作清單 ─── -->
+    <section class="dashboard-grid" aria-label="待處理家戶">
+      <div class="kpi-card warning action-card" onclick="showList('followup')" tabindex="0"
+           onkeydown="if(event.key==='Enter'){showList('followup');}">
+        <div>
+          <div class="kpi-title">待追蹤訪視</div>
+          <div class="kpi-val" id="kpiFollowup">0</div>
+          <div class="kpi-desc">訪視時勾選需追蹤（點擊看名單）</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🔁</div>
+      </div>
+
+      <div class="kpi-card action-card" onclick="showList('noalarm')" tabindex="0"
+           onkeydown="if(event.key==='Enter'){showList('noalarm');}">
+        <div>
+          <div class="kpi-title">無住宅警報器</div>
+          <div class="kpi-val" id="kpiNoAlarm">0</div>
+          <div class="kpi-desc">未裝設住警器之家戶（點擊看名單）</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🚨</div>
+      </div>
+
+      <div class="kpi-card warning action-card" onclick="showList('escape')" tabindex="0"
+           onkeydown="if(event.key==='Enter'){showList('escape');}">
+        <div>
+          <div class="kpi-title">逃生風險</div>
+          <div class="kpi-val" id="kpiEscape">0</div>
+          <div class="kpi-desc">通道堆雜物或鐵窗無出口（點擊看名單）</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">🚪</div>
+      </div>
+
+      <div class="kpi-card danger action-card" onclick="showList('risk')" tabindex="0"
+           onkeydown="if(event.key==='Enter'){showList('risk');}">
+        <div>
+          <div class="kpi-title">高風險家戶</div>
+          <div class="kpi-val" id="kpiRisk">0</div>
+          <div class="kpi-desc">依下方條件計算（點擊看名單）</div>
+        </div>
+        <div class="kpi-icon" aria-hidden="true">⚠️</div>
+      </div>
+    </section>
+
+    <!-- ─── 高風險條件設定 ─── -->
+    <section class="chart-card" style="margin-bottom:20px;">
+      <div class="chart-header" style="flex-wrap:wrap; gap:8px;">
+        <div class="section-title" style="font-size:0.95rem;">⚠️ 高風險家戶條件</div>
+        <div style="font-size:0.78rem; color:var(--text-muted);">
+          勾選要納入的條件，並設定符合幾項才算高風險
+        </div>
+      </div>
+      <div style="padding:4px 16px 16px;">
+        <div id="riskCriteria" style="display:flex; flex-wrap:wrap; gap:10px 20px;"></div>
+        <div style="margin-top:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:0.85rem; font-weight:600;">符合</span>
+          <select id="riskThreshold" class="dashboard-select" onchange="applyFilters()" style="width:auto;">
+            <option value="1">1 項</option>
+            <option value="2" selected>2 項</option>
+            <option value="3">3 項</option>
+            <option value="4">4 項</option>
+            <option value="5">5 項</option>
+          </select>
+          <span style="font-size:0.85rem; font-weight:600;">以上即列為高風險家戶</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── 名單（點上方卡片後展開）─── -->
+    <section class="chart-card hidden" id="listSection" style="margin-bottom:20px;">
+      <div class="chart-header" style="flex-wrap:wrap; gap:8px;">
+        <div class="section-title" style="font-size:0.95rem;" id="listTitle">名單</div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="exportListCSV()">⬇️ 匯出 CSV</button>
+          <button class="btn btn-secondary btn-sm" onclick="hideList()">✕ 關閉</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto; max-height:460px;">
+        <table class="rank-table" style="width:100%; min-width:920px; font-size:0.82rem;">
+          <thead>
+            <tr>
+              <th>案家</th><th>分隊</th><th>訪視日期</th><th>地址</th>
+              <th>電話</th><th>屋齡</th><th>成員</th><th>原因</th><th>訪視志工</th>
+            </tr>
+          </thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+      <div id="listEmpty" class="hidden" style="padding:24px; text-align:center; color:var(--text-muted); font-size:0.85rem;">
+        目前沒有符合條件的家戶。
+      </div>
     </section>
 
     <!-- ─── 統計圖表第一列：分隊統計與歷史趨勢 ─── -->
@@ -172,8 +294,39 @@
   <script src="app.js"></script>
   <script>
     // 全域變數
-    let rawRecords = [];
+    let allRecords = [];   // 後端回傳的完整資料
+    let rawRecords = [];   // 套用篩選後的資料（所有圖表與名單都看這一份）
     let activeQuestions = [];
+    let currentList = [];  // 目前展開的名單
+    let currentListKey = '';
+
+    // ─── 高風險條件定義 ────────────────────────────────────────
+    // 要新增條件，在這裡加一項即可，畫面上的核取方塊會自動長出來。
+    const RISK_CRITERIA = [
+      { key: 'oldHouse', label: '屋齡超過 30 年', defaultOn: true,
+        test: r => r.houseAge >= 30 },
+      { key: 'vulnerable', label: '有 65 歲以上或行動不便者', defaultOn: true,
+        test: r => (r.family65Plus || 0) > 0 || (r.familyDisabled || 0) > 0 },
+      { key: 'noAlarm', label: '未裝設住宅用火災警報器', defaultOn: true,
+        test: r => isNoAlarm(r) },
+      { key: 'escape', label: '逃生通道堆雜物或鐵窗無出口', defaultOn: true,
+        test: r => r.answers?.F16 === '否' || r.answers?.F17 === '否' },
+      { key: 'gasOverdue', label: '瓦斯桶檢驗期限逾期', defaultOn: true,
+        test: r => r.answers?.F02 === '否' },
+      { key: 'child', label: '有 6 歲以下幼童', defaultOn: false,
+        test: r => (r.familyUnder6 || 0) > 0 },
+      { key: 'highFloor', label: '居住樓層 3 樓以上', defaultOn: false,
+        test: r => (r.residingFloor || 0) >= 3 }
+    ];
+
+    // 未裝住警器：F20 答否，或 F21 未勾住宅用火災警報器
+    function isNoAlarm(r) {
+      const a = r.answers || {};
+      if (a.F20 === '否') return true;
+      if (a.F20 !== '是') return false;                    // 未作答不列入
+      const eq = Array.isArray(a.F21) ? a.F21 : String(a.F21 || '').split(',');
+      return !eq.map(s => String(s).trim()).includes('住宅用火災警報器');
+    }
     let mapInstance = null;
     let markersLayer = null;
 
@@ -211,6 +364,24 @@
     // 初始化儀表板
     // ============================================================
     window.addEventListener('DOMContentLoaded', async () => {
+      // 0. 權限檢查：儀表板含案家個資，僅限管理員與分隊承辦人
+      const user = Session.require();
+      if (!user) return;
+
+      const role = String(user.role || '志工').trim();
+      if (role !== '管理員' && role !== '分隊承辦人') {
+        alert('本頁面僅限管理員與分隊承辦人檢視。');
+        window.location.href = 'form.html';
+        return;
+      }
+
+      // 分隊承辦人只看得到自己分隊，鎖住分隊篩選避免誤會
+      if (role === '分隊承辦人') {
+        const sel = document.getElementById('filterBranch');
+        sel.innerHTML = `<option value="">${user.branch || '本分隊'}</option>`;
+        sel.disabled = true;
+      }
+
       // 1. 初始化 Leaflet 地圖（中心設在台東成功鎮）
       initMap();
 
@@ -252,21 +423,33 @@
           console.warn('無法連線取得後端題庫，採用預設展示題庫。');
         }
 
-        // 載入真實訪視紀錄
-        const res = await API.get('getDashboardData');
-        if (res.success && res.data && res.data.length > 0) {
-          rawRecords = res.data;
+        // 載入真實訪視紀錄（後端會再驗證身分並依角色過濾）
+        const res = await API.getDashboardData();
+
+        // 身分或權限被拒：不可退回模擬資料，直接請使用者重新登入
+        if (!res.success) {
+          alert(res.error || '無法讀取資料，請重新登入。');
+          Session.clear();
+          window.location.href = 'index.html';
+          return;
+        }
+
+        if (res.data && res.data.length > 0) {
+          allRecords = res.data;
           isRealData = true;
         } else {
           throw new Error('試算表無資料');
         }
       } catch (err) {
         console.warn('無法取得後端真實數據，切換為「模擬展示數據」：', err.message);
-        rawRecords = MOCK_RECORDS;
+        allRecords = MOCK_RECORDS;
         if (activeQuestions.length === 0) {
           activeQuestions = MOCK_QUESTIONS;
         }
       }
+
+      buildFilterOptions();
+      buildRiskCriteriaUI();
 
       // 更新數據標籤
       const notice = document.getElementById('dataNotice');
@@ -275,7 +458,7 @@
         notice.style.background = '#ECFDF5';
         notice.style.borderColor = '#A7F3D0';
         notice.style.color = '#065F46';
-        noticeText.textContent = `✓ 系統目前已成功連線，正在解析「${rawRecords.length} 筆真實試算表數據」。`;
+        noticeText.textContent = `✓ 系統目前已成功連線，正在解析「${allRecords.length} 筆真實試算表數據」。`;
       } else {
         notice.style.background = '#EFF6FF';
         notice.style.borderColor = '#BFDBFE';
@@ -283,24 +466,212 @@
         noticeText.textContent = '💡 系統尚未檢測到真實雲端資料，目前以「模擬演示數據」渲染，以展示完整報表成效。';
       }
 
-      // 3. 更新 KPI 指標看板
-      updateKPICards();
-
-      // 4. 繪製統計圖表
-      renderBranchChart();
-      renderTrendChart();
-      
-      // 5. 初始化並繪製動態分析下拉與圓餅圖
-      initDynamicQuestionSelector();
-
-      // 6. 渲染活躍志工排行榜
-      renderVolunteerRank();
-
-      // 7. 渲染 GPS 地圖標記
-      renderMapMarkers();
+      // 套用篩選並重畫全部區塊
+      applyFilters();
 
       refreshBtn.disabled = false;
       refreshBtn.textContent = '🔄 重新整理';
+    }
+
+    // ─── 篩選 ────────────────────────────────────────────────
+    // 所有圖表與名單都讀 rawRecords，因此這裡算出篩選結果後重畫即可。
+    function applyFilters() {
+      const from   = document.getElementById('filterFrom').value;
+      const to     = document.getElementById('filterTo').value;
+      const branch = document.getElementById('filterBranch').value;
+      const type   = document.getElementById('filterType').value;
+
+      rawRecords = allRecords.filter(r => {
+        if (branch && r.branch !== branch) return false;
+        if (type && r.visitType !== type) return false;
+        const d = String(r.visitDate || '').slice(0, 10);
+        if (from && (!d || d < from)) return false;
+        if (to && (!d || d > to)) return false;
+        return true;
+      });
+
+      const summary = document.getElementById('filterSummary');
+      summary.textContent = rawRecords.length === allRecords.length
+        ? `共 ${allRecords.length} 筆`
+        : `篩選出 ${rawRecords.length} 筆 / 全部 ${allRecords.length} 筆`;
+
+      updateKPICards();
+      updateActionCards();
+      renderBranchChart();
+      renderTrendChart();
+      initDynamicQuestionSelector();
+      renderVolunteerRank();
+      renderMapMarkers();
+      if (currentListKey) showList(currentListKey);   // 名單開著就一起更新
+    }
+
+    function resetFilters() {
+      ['filterFrom', 'filterTo'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('filterBranch').value = '';
+      document.getElementById('filterType').value = '';
+      applyFilters();
+    }
+
+    // 依實際資料建立分隊下拉選項
+    function buildFilterOptions() {
+      const sel = document.getElementById('filterBranch');
+      if (sel.disabled) return;                    // 分隊承辦人已鎖定為本分隊
+      const current = sel.value;
+      const branches = Array.from(new Set(allRecords.map(r => r.branch).filter(Boolean))).sort();
+      sel.innerHTML = '<option value="">全部分隊</option>';
+      branches.forEach(b => {
+        const o = document.createElement('option');
+        o.value = b; o.textContent = b;
+        sel.appendChild(o);
+      });
+      sel.value = current;
+    }
+
+    // ─── 高風險條件核取方塊 ───────────────────────────────────
+    function buildRiskCriteriaUI() {
+      const box = document.getElementById('riskCriteria');
+      if (box.dataset.built) return;               // 只建一次，保留使用者的勾選
+      box.innerHTML = '';
+      RISK_CRITERIA.forEach(c => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer;';
+        label.innerHTML = `<input type="checkbox" data-risk="${c.key}" ${c.defaultOn ? 'checked' : ''}
+                                  onchange="applyFilters()" style="width:16px; height:16px;">
+                           <span>${c.label}</span>`;
+        box.appendChild(label);
+      });
+      box.dataset.built = '1';
+    }
+
+    // 計算某筆紀錄符合幾項「已勾選」的風險條件
+    function riskHits(r) {
+      const on = Array.from(document.querySelectorAll('#riskCriteria input[data-risk]:checked'))
+                      .map(el => el.dataset.risk);
+      return RISK_CRITERIA.filter(c => on.includes(c.key) && c.test(r));
+    }
+
+    function isHighRisk(r) {
+      const need = parseInt(document.getElementById('riskThreshold').value, 10) || 2;
+      return riskHits(r).length >= need;
+    }
+
+    // ─── 待處理家戶指標 ───────────────────────────────────────
+    const LIST_DEFS = {
+      followup: {
+        title: '待追蹤訪視名單',
+        filter: r => r.answers?.F24 === '是',
+        reason: () => '訪視時勾選需追蹤'
+      },
+      noalarm: {
+        title: '無住宅用火災警報器名單',
+        filter: r => isNoAlarm(r),
+        reason: r => r.answers?.F20 === '否' ? '家中無消防設備' : '有設備但未含住警器'
+      },
+      escape: {
+        title: '逃生風險名單',
+        filter: r => r.answers?.F16 === '否' || r.answers?.F17 === '否',
+        reason: r => [
+          r.answers?.F16 === '否' ? '逃生通道堆放雜物' : '',
+          r.answers?.F17 === '否' ? '鐵窗無安全出口' : ''
+        ].filter(Boolean).join('、')
+      },
+      risk: {
+        title: '高風險家戶名單',
+        filter: r => isHighRisk(r),
+        reason: r => riskHits(r).map(c => c.label).join('、')
+      }
+    };
+
+    function updateActionCards() {
+      document.getElementById('kpiFollowup').textContent = rawRecords.filter(LIST_DEFS.followup.filter).length;
+      document.getElementById('kpiNoAlarm').textContent  = rawRecords.filter(LIST_DEFS.noalarm.filter).length;
+      document.getElementById('kpiEscape').textContent   = rawRecords.filter(LIST_DEFS.escape.filter).length;
+      document.getElementById('kpiRisk').textContent     = rawRecords.filter(LIST_DEFS.risk.filter).length;
+    }
+
+    // ─── 名單 ────────────────────────────────────────────────
+    function showList(key) {
+      const def = LIST_DEFS[key];
+      if (!def) return;
+
+      currentListKey = key;
+      currentList = rawRecords.filter(def.filter);
+
+      document.getElementById('listTitle').textContent = `${def.title}（${currentList.length} 戶）`;
+      document.getElementById('listSection').classList.remove('hidden');
+
+      const body  = document.getElementById('listBody');
+      const empty = document.getElementById('listEmpty');
+      body.innerHTML = '';
+
+      if (currentList.length === 0) {
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        currentList.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = [
+            r.clientName || '', r.branch || '', r.visitDate || '',
+            r.clientAddress || '', r.clientPhone || '',
+            r.houseAge ? r.houseAge + ' 年' : '',
+            memberSummary(r), def.reason(r), r.submitter || ''
+          ].map(v => `<td>${escapeHtml(String(v))}</td>`).join('');
+          body.appendChild(tr);
+        });
+      }
+
+      document.getElementById('listSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function hideList() {
+      currentListKey = '';
+      document.getElementById('listSection').classList.add('hidden');
+    }
+
+    // 家庭成員摘要：只列出有人數的族群
+    function memberSummary(r) {
+      const parts = [];
+      if (r.familySize)      parts.push(`共${r.familySize}人`);
+      if (r.family65Plus)    parts.push(`長者${r.family65Plus}`);
+      if (r.familyDisabled)  parts.push(`行動不便${r.familyDisabled}`);
+      if (r.familyUnder6)    parts.push(`幼童${r.familyUnder6}`);
+      if (r.familyForeigner) parts.push(`外籍${r.familyForeigner}`);
+      return parts.join('、');
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // ─── 匯出 CSV ────────────────────────────────────────────
+    function exportListCSV() {
+      if (currentList.length === 0) { alert('目前名單沒有資料可匯出。'); return; }
+
+      const def = LIST_DEFS[currentListKey];
+      const headers = ['案家姓名', '所屬分隊', '訪視日期', '地址', '電話', '屋齡',
+                       '家庭成員', '列入原因', '訪視志工'];
+      const rows = currentList.map(r => [
+        r.clientName || '', r.branch || '', r.visitDate || '',
+        r.clientAddress || '', r.clientPhone || '',
+        r.houseAge || '', memberSummary(r), def.reason(r), r.submitter || ''
+      ]);
+
+      const csv = [headers].concat(rows)
+        .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+        .join('\r\n');
+
+      // 加上 BOM，Excel 開啟才不會中文亂碼
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const today = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `${def.title}_${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     // ============================================================

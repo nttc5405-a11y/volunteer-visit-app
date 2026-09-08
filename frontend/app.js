@@ -77,6 +77,11 @@ const API = {
   getBranches:       ()             => API.get('getBranches'),
   /** 登入驗證 */
   verifyLogin:       (idCard, phone, name)  => API.get('verifyLogin', { idCard, phone, name }),
+  /** 取得儀表板資料（含個資，需帶登入身分，後端會再驗證一次並依角色過濾） */
+  getDashboardData() {
+    const s = Session.get() || {};
+    return API.get('getDashboardData', { idCard: s.idCard, phone: s.phone, name: s.name });
+  },
   
   /** 提交訪視表單 (含離線暫存邏輯) */
   async submitForm(record) {

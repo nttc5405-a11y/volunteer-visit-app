@@ -171,7 +171,14 @@
       const res = await API.verifyLogin(idCard, phone, name);
 
       if (res.success) {
-        Session.set({ ...res.user, loginTime: new Date().toISOString() });
+        // 一併保留登入代碼：儀表板含個資，開啟時需再向後端驗證一次身分。
+        // 只存在本次分頁的 sessionStorage，關閉分頁即消失。
+        Session.set({
+          ...res.user,
+          idCard: idCard,
+          phone: phone,
+          loginTime: new Date().toISOString()
+        });
         Toast.success(`歡迎，${res.user.name}！`);
 
         // 短暫停頓後跳轉

@@ -40,7 +40,7 @@ function doGet(e) {
         result = verifyLogin(params.idCard, params.phone, params.name);
         break;
       case 'getDashboardData':
-        result = getDashboardData();
+        result = getDashboardData(params.idCard, params.phone, params.name);
         break;
       default:
         result = { success: false, error: '未知的 action: ' + action };
@@ -582,14 +582,28 @@ function splitToBranch(record, id) {
 // ============================================================
 // 取得儀表板分析所需的訪視紀錄統計資料
 // ============================================================
-function getDashboardData() {
+function getDashboardData(idCardLast3, phoneLast3, name) {
+  // 儀表板含案家姓名、地址、電話等個資，必須先驗證身分才回傳資料。
+  var auth = verifyLogin(idCardLast3, phoneLast3, name);
+  if (!auth.success || !auth.user) {
+    return { success: false, error: '請重新登入後再開啟儀表板。' };
+  }
+
+  var role = String(auth.user.role || '志工').trim();
+  if (role !== '管理員' && role !== '分隊承辦人') {
+    return { success: false, error: '權限不足：僅限管理員與分隊承辦人檢視統計資料。' };
+  }
+
+  // 分隊承辦人只能看自己分隊；管理員看全部
+  var scopeBranch = (role === '分隊承辦人') ? String(auth.user.branch || '').trim() : '';
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('訪視紀錄表');
   if (!sheet) return { success: false, error: '找不到「訪視紀錄表」工作表。' };
 
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) {
-    return { success: true, data: [] };
+    return { success: true, data: [], viewer: { name: auth.user.name, role: role, branch: scopeBranch } };
   }
 
   var headers = data[0];
@@ -624,22 +638,50 @@ function getDashboardData() {
       visitDateVal = String(row[colIdx['訪視日期'] || 2]);
     }
 
+    var branchName = row[colIdx['所屬分隊'] || 6];
+
+    // 分隊承辦人只取自己分隊的紀錄
+    if (scopeBranch && String(branchName).trim() !== scopeBranch) continue;
+
+    // 取數值欄位（空白視為 0）
+    var num = function(header) {
+      if (colIdx[header] === undefined) return 0;
+      return parseInt(row[colIdx[header]], 10) || 0;
+    };
+    var text = function(header) {
+      if (colIdx[header] === undefined) return '';
+      return row[colIdx[header]];
+    };
+
     records.push({
       id:                id,
       timestamp:         row[colIdx['填報時間'] || 1],
       visitDate:         visitDateVal,
       visitType:         row[colIdx['訪視類型'] || 3],
       submitter:         row[colIdx['主填寫人姓名'] || 4],
-      branch:            row[colIdx['所屬分隊'] || 6],
+      branch:            branchName,
       clientName:        row[colIdx['案家姓名'] || 7],
+      clientGender:      text('案家性別'),
+      clientPhone:       text('案家電話'),
+      clientAddress:     text('案家地址'),
       gps:               row[colIdx['GPS定位座標'] || 11],
       houseAge:          parseInt(row[colIdx['房屋屋齡'] || 12]) || 0,
       residentialType:   row[colIdx['住宅形式'] || 13],
+      totalFloors:       num('總樓層'),
+      residingFloor:     num('居住樓層'),
       buildingStructure: row[colIdx['建築結構'] || 16],
       familySize:        parseInt(row[colIdx['家庭總人數'] || 17]) || 0,
+      family65Plus:      num('家庭65歲以上人數'),
+      familyDisabled:    num('家庭行動不便人數'),
+      familyUnder6:      num('家庭6歲以下人數'),
+      familyForeigner:   num('家庭外籍人士人數'),
       answers:           answers
     });
   }
 
-  return { success: true, data: records };
+  return {
+    success: true,
+    data: records,
+    viewer: { name: auth.user.name, role: role, branch: scopeBranch }
+  };
 }
