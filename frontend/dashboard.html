@@ -896,8 +896,11 @@
       rawRecords.forEach(r => {
         if (r.visitType === '防火宣導') {
           smokeAlarmApplicable++;
-          const eq = r.answers?.F21 || [];
-          if (Array.isArray(eq) && eq.includes('住宅用火災警報器')) {
+          // 試算表回傳的複選題是逗號字串，不是陣列，兩種格式都要能判斷
+          const eq = Array.isArray(r.answers?.F21)
+            ? r.answers.F21
+            : String(r.answers?.F21 || '').split(',').map(s => s.trim());
+          if (eq.includes('住宅用火災警報器')) {
             smokeAlarmInstalled++;
           }
         }
