@@ -365,6 +365,8 @@
       if (!res.success) throw new Error(res.error);
 
       questions = res.data || [];
+      hasSuggestionColumn = res.hasSuggestionColumn === true;
+      SUGGESTION_RULES = buildSuggestionRules();
       renderFilteredQuestions();
 
     } catch (err) {
@@ -444,46 +446,54 @@
     card.querySelectorAll('input, textarea').forEach(el => { el.value = ''; });
   }
 
-  // ─── 自動建議規則表 ─────────────────────────────────────────
-  // 「某題答否 → 自動勾選對應的改善建議」。要調整連動，改這張表就好。
-  // suggest 的文字必須與題庫中該建議題的「選項內容」完全一致；
-  // 對不上時會自動略過並在瀏覽器主控台留下警告，
-  // 不會產生「畫面看不到、卻被送進試算表」的答案。
-  const SUGGESTION_RULES = [
-    {
-      visitType: '防火宣導',
-      target: 'F23',
-      map: [
-        { q: 'F02', suggest: ['更換合格瓦斯鋼瓶'] },        // 檢驗期限逾期
-        { q: 'F03', suggest: ['定期檢查瓦斯桶與皮管'] },    // 皮管龜裂老化
-        { q: 'F04', suggest: ['養成巡視並關閉火源習慣'] },  // 未隨手關瓦斯
-        { q: 'F05', suggest: ['簽訂瓦斯定型化契約'] },
-        { q: 'F08', suggest: ['定期檢查熱水器與配線'] },    // 無 CNS/TGAS 標示
-        { q: 'F09', suggest: ['定期檢查熱水器與配線'] },    // 裝設位置不通風
-        { q: 'F11', suggest: ['定期檢查插座與延長線'] },
-        { q: 'F12', suggest: ['定期檢查插座與延長線'] },
-        { q: 'F13', suggest: ['定期檢查插座與延長線'] },
-        { q: 'F14', suggest: ['養成巡視並關閉火源習慣'] },  // 神桌燈具/魚缸馬達
-        { q: 'F15', suggest: ['排煙機及排煙管定期清洗'] },
-        { q: 'F16', suggest: ['勿在逃生通道堆放雜物'] },
-        { q: 'F17', suggest: ['鐵窗預留出口並保持開啟'] },
-        { q: 'F19', suggest: ['訂定家庭逃生計畫'] },
-        { q: 'F22', suggest: ['定期檢查消防設備'] }         // 設備外觀性能不正常
-      ]
-    },
-    {
-      visitType: '防災宣導',
-      target: 'D18',
-      map: [
-        { q: 'D06', suggest: ['準備緊急避難包'] },
-        { q: 'D08', suggest: ['制定家庭避難逃生計畫'] },    // 不知避難收容所與路線
-        { q: 'D11', suggest: ['家具燈具盡可能固定'] },      // 未檢視居家環境安全
-        { q: 'D12', suggest: ['家具燈具盡可能固定'] },      // 大型傢俱未固定
-        { q: 'D13', suggest: ['養成巡視並關閉火源習慣'] },  // 不知應優先關閉電源火源
-        { q: 'D15', suggest: ['制定家庭避難逃生計畫'] }     // 不知空曠地點與疏散路線
-      ]
-    }
-  ];
+  // ─── 自動建議規則 ───────────────────────────────────────────
+  // 「某題答否 → 自動勾選對應的改善建議」現在由「訪視題庫」的『答否建議』欄維護，
+  // 不需要改程式。下面這份只是題庫尚未建立該欄時的預設值（相容舊試算表）。
+  const FALLBACK_SUGGEST_ON_NO = {
+    F02: ['更換合格瓦斯鋼瓶'],      F03: ['定期檢查瓦斯桶與皮管'],
+    F04: ['養成巡視並關閉火源習慣'], F05: ['簽訂瓦斯定型化契約'],
+    F08: ['定期檢查熱水器與配線'],   F09: ['定期檢查熱水器與配線'],
+    F11: ['定期檢查插座與延長線'],   F12: ['定期檢查插座與延長線'],
+    F13: ['定期檢查插座與延長線'],   F14: ['養成巡視並關閉火源習慣'],
+    F15: ['排煙機及排煙管定期清洗'], F16: ['勿在逃生通道堆放雜物'],
+    F17: ['鐵窗預留出口並保持開啟'], F19: ['訂定家庭逃生計畫'],
+    F22: ['定期檢查消防設備'],
+    D06: ['準備緊急避難包'],        D08: ['制定家庭避難逃生計畫'],
+    D11: ['家具燈具盡可能固定'],    D12: ['家具燈具盡可能固定'],
+    D13: ['養成巡視並關閉火源習慣'], D15: ['制定家庭避難逃生計畫']
+  };
+
+  // 題庫是否已有『答否建議』欄（由後端回報）
+  let hasSuggestionColumn = false;
+
+  // 依題庫內容組出實際生效的連動規則
+  function buildSuggestionRules() {
+    const rules = [];
+    const types = Array.from(new Set(questions.map(q => q.visitType).filter(Boolean)));
+
+    types.forEach(visitType => {
+      // 每個宣導類型的「改善建議」題＝該類型中題目分類含「改善建議」的複選題
+      const target = questions.find(q =>
+        q.visitType === visitType &&
+        q.type === '複選題' &&
+        String(q.category || '').includes('改善建議'));
+      if (!target) return;
+
+      const map = [];
+      questions.filter(q => q.visitType === visitType).forEach(q => {
+        const suggest = hasSuggestionColumn
+          ? (q.suggestOnNo || [])
+          : (FALLBACK_SUGGEST_ON_NO[q.id] || []);
+        if (suggest.length > 0) map.push({ q: q.id, suggest });
+      });
+
+      if (map.length > 0) rules.push({ visitType, target: target.id, map });
+    });
+
+    return rules;
+  }
+
+  let SUGGESTION_RULES = [];
 
   // 記錄「由系統自動勾上」的項目，之後才知道哪些可以自動取消。
   // 志工手動勾的項目不在此列，因此不會被系統擅自取消。

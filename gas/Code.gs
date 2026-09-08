@@ -114,11 +114,20 @@ function getQuestions() {
       options:    row[col.options]
         ? String(row[col.options]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
         : [],
-      required:   row[col.required] === true || String(row[col.required]).toUpperCase() === 'TRUE'
+      required:   row[col.required] === true || String(row[col.required]).toUpperCase() === 'TRUE',
+      // 該題答「否」時要自動勾選的改善建議（半形逗號分隔）
+      suggestOnNo: col.suggestOnNo >= 0 && row[col.suggestOnNo]
+        ? String(row[col.suggestOnNo]).split(',').map(function(o) { return o.trim(); }).filter(function(o) { return o; })
+        : []
     });
   }
 
-  return { success: true, data: questions };
+  return {
+    success: true,
+    data: questions,
+    // 題庫尚未建立「答否建議」欄時，前端沿用內建的預設連動規則
+    hasSuggestionColumn: col.suggestOnNo >= 0
+  };
 }
 
 // ============================================================
@@ -139,12 +148,13 @@ var BASE_RECORD_HEADERS = [
 function mapQuestionColumns_(headerRow) {
   var col = {
     id: 0, visitType: 1, dependency: 2, category: 3,
-    content: 4, type: 5, options: 6, required: 7, enabled: -1
+    content: 4, type: 5, options: 6, required: 7, enabled: -1, suggestOnNo: -1
   };
   var names = {
     '題目代碼': 'id',      '訪視類型': 'visitType', '依賴條件': 'dependency',
     '題目分類': 'category', '題目內容': 'content',   '題型':     'type',
-    '選項內容': 'options',  '必填':     'required',  '啟用':     'enabled'
+    '選項內容': 'options',  '必填':     'required',  '啟用':     'enabled',
+    '答否建議': 'suggestOnNo'
   };
 
   for (var c = 0; c < headerRow.length; c++) {

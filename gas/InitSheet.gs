@@ -6,7 +6,8 @@
  * ║  1. initializeSheets()     → 建立主資料庫的 4 張工作表        ║
  * ║  2. createBranchSheets()   → 自動建立 3 個分隊專屬試算表      ║
  * ║  3. syncQuestionColumns()  → 題庫增減題目後同步紀錄表欄位     ║
- * ║  4. resetAllSheets()       → 重置所有資料（謹慎使用）         ║
+ * ║  4. fillDefaultSuggestionRules() → 填入預設的答否連動規則     ║
+ * ║  5. resetAllSheets()       → 重置所有資料（謹慎使用）         ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
  * ===== 使用方式 =====
@@ -18,6 +19,106 @@
  */
 
 // ============================================================
+// 預設連動規則：某題答「否」→ 自動勾選的改善建議
+//
+// 這份對照只是「預設值」，實際生效的是「訪視題庫」的『答否建議』欄。
+// 執行選單的「填入預設連動規則」會把這裡的內容寫進該欄（只填空白的列），
+// 之後你在試算表怎麼改，系統就怎麼跑，不必再動程式。
+// 建議文字必須與該類型『改善建議』複選題的選項一字不差。
+// ============================================================
+var DEFAULT_SUGGEST_ON_NO = {
+  // 防火宣導 → F23 防火改善建議
+  'F02': '更換合格瓦斯鋼瓶',
+  'F03': '定期檢查瓦斯桶與皮管',
+  'F04': '養成巡視並關閉火源習慣',
+  'F05': '簽訂瓦斯定型化契約',
+  'F08': '定期檢查熱水器與配線',
+  'F09': '定期檢查熱水器與配線',
+  'F11': '定期檢查插座與延長線',
+  'F12': '定期檢查插座與延長線',
+  'F13': '定期檢查插座與延長線',
+  'F14': '養成巡視並關閉火源習慣',
+  'F15': '排煙機及排煙管定期清洗',
+  'F16': '勿在逃生通道堆放雜物',
+  'F17': '鐵窗預留出口並保持開啟',
+  'F19': '訂定家庭逃生計畫',
+  'F22': '定期檢查消防設備',
+  // 防災宣導 → D18 防災改善建議
+  'D06': '準備緊急避難包',
+  'D08': '制定家庭避難逃生計畫',
+  'D11': '家具燈具盡可能固定',
+  'D12': '家具燈具盡可能固定',
+  'D13': '養成巡視並關閉火源習慣',
+  'D15': '制定家庭避難逃生計畫'
+};
+
+// ============================================================
+// 填入預設連動規則
+//
+// 在「訪視題庫」的『答否建議』欄填入上方預設值。
+// 只會填「目前空白」的儲存格，不會覆蓋你已經改過的內容。
+// ============================================================
+function fillDefaultSuggestionRules() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('訪視題庫');
+  var ui    = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+
+  if (!sheet) {
+    if (ui) ui.alert('❌ 找不到「訪視題庫」工作表。');
+    return;
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    if (ui) ui.alert('❌ 「訪視題庫」沒有任何題目。');
+    return;
+  }
+
+  // 確保有『答否建議』欄，沒有就補在最後
+  var col = mapQuestionColumns_(data[0]);
+  if (col.suggestOnNo < 0) {
+    var newCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, newCol).setValue('答否建議');
+    _styleHeader(sheet, newCol);
+    _noteSuggestionColumn(sheet, newCol);
+    col.suggestOnNo = newCol - 1;
+    data = sheet.getDataRange().getValues();
+  }
+
+  var filled = [], skipped = [];
+  for (var i = 1; i < data.length; i++) {
+    var code = String(data[i][col.id] || '').trim();
+    if (!code || !DEFAULT_SUGGEST_ON_NO.hasOwnProperty(code)) continue;
+
+    var current = String(data[i][col.suggestOnNo] || '').trim();
+    if (current) { skipped.push(code); continue; }   // 已有內容就不覆蓋
+
+    sheet.getRange(i + 1, col.suggestOnNo + 1).setValue(DEFAULT_SUGGEST_ON_NO[code]);
+    filled.push(code);
+  }
+
+  var msg = '✅ 已填入 ' + filled.length + ' 條預設連動規則。'
+          + (filled.length ? '\n（' + filled.join('、') + '）' : '')
+          + (skipped.length ? '\n\n以下題目已有內容，保留未動：\n' + skipped.join('、') : '')
+          + '\n\n之後直接在「答否建議」欄修改即可，不需重新部署。';
+
+  Logger.log(msg);
+  if (ui) ui.alert(msg);
+}
+
+// 『答否建議』欄的說明備註
+function _noteSuggestionColumn(sheet, colIndex) {
+  sheet.getRange(1, colIndex).setNote(
+    '該題答「否」時，自動勾選的改善建議。\n' +
+    '多項以半形逗號「,」分隔。\n' +
+    '文字必須與同類型「改善建議」複選題的選項一字不差\n' +
+    '（防火→F23、防災→D18），否則會被略過。\n' +
+    '留空表示該題不觸發任何建議。'
+  );
+}
+
+// ============================================================
 // 開啟試算表時建立自訂選單
 // ============================================================
 // 選單只放「安全、可重複執行」的功能。
@@ -27,6 +128,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('志工訪視系統')
     .addItem('🔄 同步題庫欄位', 'syncQuestionColumns')
+    .addItem('📋 填入預設連動規則', 'fillDefaultSuggestionRules')
     .addToUi();
 }
 
@@ -294,7 +396,7 @@ function _createQuestionSheet(ss) {
     sheet.clearFormats();
   }
 
-  var headers = ['題目代碼', '訪視類型', '依賴條件', '題目分類', '題目內容', '題型', '選項內容', '必填', '啟用'];
+  var headers = ['題目代碼', '訪視類型', '依賴條件', '題目分類', '題目內容', '題型', '選項內容', '必填', '啟用', '答否建議'];
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
   sheet.setFrozenRows(1);
@@ -380,8 +482,13 @@ function _createQuestionSheet(ss) {
     ['D18', '防災宣導', '', '改善建議', '防災改善建議事項 (可多選)', '複選題', '制定家庭避難逃生計畫,家具燈具盡可能固定,養成巡視並關閉火源習慣,勿在逃生通道堆放雜物,準備緊急避難包,其他建議', false]
   ];
 
-  // 預設題目一律為啟用狀態（第 9 欄「啟用」）
-  questions.forEach(function(row) { sheet.appendRow(row.concat([true])); });
+  // 第 9 欄「啟用」預設 TRUE；第 10 欄「答否建議」帶入預設連動規則
+  questions.forEach(function(row) {
+    var code = row[0];
+    sheet.appendRow(row.concat([true, DEFAULT_SUGGEST_ON_NO[code] || '']));
+  });
+
+  _noteSuggestionColumn(sheet, 10);
 
   sheet.setColumnWidth(1, 80);
   sheet.setColumnWidth(2, 90);
@@ -392,6 +499,7 @@ function _createQuestionSheet(ss) {
   sheet.setColumnWidth(7, 220);
   sheet.setColumnWidth(8, 60);
   sheet.setColumnWidth(9, 60);
+  sheet.setColumnWidth(10, 200);
 
   Logger.log('✓ 訪視題庫 建立完成（' + questions.length + ' 題）');
 }
