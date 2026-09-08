@@ -60,14 +60,12 @@ function syncQuestionColumns() {
 
   // 一併同步各分隊專屬試算表的標題列
   var branchResults = [];
-  var branchSheet   = ss.getSheetByName('分隊對照表');
+  var branchList    = readBranchTable_();   // 依欄位名稱讀取，新增欄位不會錯位
 
-  if (branchSheet) {
-    var branchData = branchSheet.getDataRange().getValues();
-
-    for (var i = 1; i < branchData.length; i++) {
-      var branchName = String(branchData[i][0]).trim();
-      var subSheetId = String(branchData[i][2]).trim();
+  if (branchList) {
+    for (var i = 0; i < branchList.length; i++) {
+      var branchName = branchList[i].name;
+      var subSheetId = branchList[i].sheetId;
       if (!branchName || !subSheetId) continue;
 
       try {
@@ -249,16 +247,23 @@ function _createBranchSheet(ss) {
     sheet.clearFormats();
   }
 
-  var headers = ['分隊名稱', '分隊承辦人帳號', '分隊專屬試算表ID'];
+  var headers = ['分隊名稱', '分隊承辦人帳號', '分隊專屬試算表ID', '所屬大隊'];
   sheet.appendRow(headers);
   _styleHeader(sheet, headers.length);
   sheet.setFrozenRows(1);
 
+  sheet.getRange('D1').setNote(
+    '該分隊隸屬的大隊名稱。\n' +
+    '「大隊承辦人」可查閱所屬大隊底下所有分隊的訪視紀錄，\n' +
+    '判定依據就是這一欄，同一大隊的分隊請填一模一樣的名稱。\n' +
+    '留空則該分隊不屬於任何大隊。'
+  );
+
   // 範例分隊（試算表ID 待建立後填入）
   var branches = [
-    ['臺東防宣', 'taitung-manager@example.com', ''],
-    ['關山防宣', 'guanshan-manager@example.com', ''],
-    ['成功防宣', 'chenggong-manager@example.com', '']
+    ['臺東防宣', 'taitung-manager@example.com', '', '第一大隊'],
+    ['關山防宣', 'guanshan-manager@example.com', '', '第二大隊'],
+    ['成功防宣', 'chenggong-manager@example.com', '', '第二大隊']
   ];
 
   branches.forEach(function(row) { sheet.appendRow(row); });

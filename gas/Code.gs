@@ -245,13 +245,16 @@ function getColumnIndexes(headers) {
     branch: -1,
     phone: -1,
     role: -1,
-    idCard: -1
+    idCard: -1,
+    corps: -1
   };
   
   for (var i = 0; i < headers.length; i++) {
     var header = String(headers[i]).trim();
     if (header.indexOf('姓名') !== -1) {
       indexes.name = i;
+    } else if (header.indexOf('大隊') !== -1) {
+      indexes.corps = i;
     } else if (header.indexOf('單位') !== -1 || header.indexOf('分隊') !== -1) {
       indexes.branch = i;
     } else if (header.indexOf('手機') !== -1 || header.indexOf('電話') !== -1) {
@@ -288,7 +291,8 @@ function getAllMembers() {
     members.push({
       name:   name,
       branch: idx.branch !== -1 ? String(row[idx.branch]).trim() : '無分隊',
-      role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工'
+      role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工',
+      corps:  idx.corps !== -1 ? String(row[idx.corps]).trim() : ''
     });
   }
 
@@ -313,22 +317,113 @@ function getMembersByBranch(branch) {
 // 取得分隊列表
 // ============================================================
 function getBranches() {
+  var branches = readBranchTable_();
+  if (branches === null) return { success: false, error: '找不到「分隊對照表」工作表。' };
+
+  return {
+    success: true,
+    data: branches.map(function(b) {
+      return { name: b.name, managerEmail: b.managerEmail, corps: b.corps };
+    })
+  };
+}
+
+// ============================================================
+// 讀取「分隊對照表」：依標題名稱取欄，找不到才退回原本的固定位置。
+// 回傳 [{ name, managerEmail, sheetId, corps }]，找不到工作表時回傳 null。
+// ============================================================
+function readBranchTable_() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('分隊對照表');
-  if (!sheet) return { success: false, error: '找不到「分隊對照表」工作表。' };
+  if (!sheet) return null;
 
   var data = sheet.getDataRange().getValues();
-  var branches = [];
+  if (data.length <= 1) return [];
 
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    if (!row[0]) continue;
-    branches.push({
-      name:         String(row[0]).trim(),
-      managerEmail: String(row[1]).trim()
-    });
+  var col = { name: 0, managerEmail: 1, sheetId: 2, corps: -1 };
+  var names = {
+    '分隊名稱': 'name',
+    '分隊承辦人帳號': 'managerEmail', '承辦人Email': 'managerEmail', '承辦人 Email': 'managerEmail',
+    '分隊專屬試算表ID': 'sheetId',
+    '所屬大隊': 'corps'
+  };
+
+  for (var c = 0; c < data[0].length; c++) {
+    var key = names[String(data[0][c]).trim()];
+    if (key) col[key] = c;
   }
 
-  return { success: true, data: branches };
+  var out = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[col.name]) continue;
+    out.push({
+      name:         String(row[col.name]).trim(),
+      managerEmail: col.managerEmail >= 0 ? String(row[col.managerEmail] || '').trim() : '',
+      sheetId:      col.sheetId      >= 0 ? String(row[col.sheetId]      || '').trim() : '',
+      corps:        col.corps        >= 0 ? String(row[col.corps]        || '').trim() : ''
+    });
+  }
+  return out;
+}
+
+// ============================================================
+// 依登入者角色，算出可檢視哪些分隊的紀錄。
+// 回傳 null 代表不限制（管理員看全部）；回傳陣列則只限該些分隊。
+// ============================================================
+function resolveVisibleBranches_(role, ownBranch, ownCorps) {
+  if (role === '管理員') return null;
+
+  ownBranch = String(ownBranch || '').trim();
+  ownCorps  = String(ownCorps  || '').trim();
+
+  if (role === '分隊承辦人') return ownBranch ? [ownBranch] : [];
+
+  if (role === '大隊承辦人') {
+    // 大隊以「人員帳號管理」的所屬大隊為準；沒填時退而求其次用所屬單位當大隊名稱
+    var corps = ownCorps || ownBranch;
+    if (!corps) return [];
+
+    var list = getBranchesOfCorps_(corps);
+    // 大隊底下查不到任何單位時，至少讓他看得到自己的單位，不要整個空白
+    if (list.length === 0 && ownBranch) list.push(ownBranch);
+    return list;
+  }
+
+  return [];
+}
+
+// ============================================================
+// 取得某一大隊底下的所有單位（分隊）名稱。
+// 來源有二，取聯集：
+//   1.「人員帳號管理」的所屬大隊 → 所屬單位（現有資料即已填寫）
+//   2.「分隊對照表」的所屬大隊欄（若有填）
+// ============================================================
+function getBranchesOfCorps_(corps) {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var list = [];
+  var push = function(v) {
+    var name = String(v || '').trim();
+    if (name && list.indexOf(name) === -1) list.push(name);
+  };
+
+  var memberSheet = ss.getSheetByName('人員帳號管理');
+  if (memberSheet) {
+    var data = memberSheet.getDataRange().getValues();
+    if (data.length > 1) {
+      var idx = getColumnIndexes(data[0]);
+      if (idx.corps !== -1 && idx.branch !== -1) {
+        for (var i = 1; i < data.length; i++) {
+          if (String(data[i][idx.corps] || '').trim() === corps) push(data[i][idx.branch]);
+        }
+      }
+    }
+  }
+
+  (readBranchTable_() || []).forEach(function(b) {
+    if (b.corps && b.corps === corps) push(b.name);
+  });
+
+  return list;
 }
 
 // ============================================================
@@ -369,7 +464,8 @@ function verifyLogin(idCardLast3, phoneLast3, name) {
       matches.push({
         name:   memberName,
         branch: idx.branch !== -1 ? String(row[idx.branch]).trim() : '',
-        role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工'
+        role:   idx.role !== -1 ? String(row[idx.role]).trim() : '志工',
+      corps:  idx.corps !== -1 ? String(row[idx.corps]).trim() : ''
       });
     }
   }
@@ -521,17 +617,16 @@ function submitForm(record) {
 // 分隊自動拆分：將紀錄同步至分隊專屬試算表
 // ============================================================
 function splitToBranch(record, id) {
-  var ss          = SpreadsheetApp.getActiveSpreadsheet();
-  var branchSheet = ss.getSheetByName('分隊對照表');
-  if (!branchSheet) return;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  var branchData = branchSheet.getDataRange().getValues();
+  // 依欄位名稱讀取，分隊對照表新增欄位（例如「所屬大隊」）也不會錯位
+  var branchList = readBranchTable_();
+  if (branchList === null) return;
 
-  for (var i = 1; i < branchData.length; i++) {
-    var row = branchData[i];
-    if (String(row[0]).trim() !== record.branch) continue;
+  for (var i = 0; i < branchList.length; i++) {
+    if (branchList[i].name !== String(record.branch || '').trim()) continue;
 
-    var subSheetId = String(row[2]).trim();
+    var subSheetId = branchList[i].sheetId;
     if (!subSheetId) {
       Logger.log('分隊「' + record.branch + '」尚未設定專屬試算表 ID，跳過同步。');
       return;
@@ -590,12 +685,14 @@ function getDashboardData(idCardLast3, phoneLast3, name) {
   }
 
   var role = String(auth.user.role || '志工').trim();
-  if (role !== '管理員' && role !== '分隊承辦人') {
-    return { success: false, error: '權限不足：僅限管理員與分隊承辦人檢視統計資料。' };
+  var ALLOWED_ROLES = ['管理員', '大隊承辦人', '分隊承辦人'];
+  if (ALLOWED_ROLES.indexOf(role) === -1) {
+    return { success: false, error: '權限不足：僅限管理員、大隊承辦人與分隊承辦人檢視統計資料。' };
   }
 
-  // 分隊承辦人只能看自己分隊；管理員看全部
-  var scopeBranch = (role === '分隊承辦人') ? String(auth.user.branch || '').trim() : '';
+  // 可檢視的分隊：管理員為 null（全部）；大隊承辦人為所屬大隊的所有分隊；
+  // 分隊承辦人僅限自己分隊。
+  var visibleBranches = resolveVisibleBranches_(role, auth.user.branch, auth.user.corps);
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('訪視紀錄表');
@@ -603,7 +700,10 @@ function getDashboardData(idCardLast3, phoneLast3, name) {
 
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) {
-    return { success: true, data: [], viewer: { name: auth.user.name, role: role, branch: scopeBranch } };
+    return {
+      success: true, data: [],
+      viewer: { name: auth.user.name, role: role, branch: auth.user.branch || '', branches: visibleBranches }
+    };
   }
 
   var headers = data[0];
@@ -640,8 +740,8 @@ function getDashboardData(idCardLast3, phoneLast3, name) {
 
     var branchName = row[colIdx['所屬分隊'] || 6];
 
-    // 分隊承辦人只取自己分隊的紀錄
-    if (scopeBranch && String(branchName).trim() !== scopeBranch) continue;
+    // 依角色限定可檢視的分隊（管理員為 null，不過濾）
+    if (visibleBranches && visibleBranches.indexOf(String(branchName).trim()) === -1) continue;
 
     // 取數值欄位（空白視為 0）
     var num = function(header) {
@@ -682,6 +782,6 @@ function getDashboardData(idCardLast3, phoneLast3, name) {
   return {
     success: true,
     data: records,
-    viewer: { name: auth.user.name, role: role, branch: scopeBranch }
+    viewer: { name: auth.user.name, role: role, branch: auth.user.branch || '', branches: visibleBranches }
   };
 }

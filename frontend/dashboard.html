@@ -16,19 +16,23 @@
   <!-- ============ 頂部導覽列 ============ -->
   <header class="app-header" role="banner">
     <div class="app-header-inner">
-      <div class="app-brand" onclick="window.location.href='form.html'" style="cursor:pointer;">
+      <div class="app-brand">
         <span class="app-logo-emoji" aria-hidden="true">📊</span>
         <div>
           <h1 class="app-name">訪視數據分析</h1>
-          <p class="app-subtitle">志工居家訪視電子化系統</p>
+          <p class="app-subtitle" id="viewerInfoText">志工居家訪視電子化系統</p>
         </div>
       </div>
       <div style="display:flex; gap:10px;">
-        <button class="btn btn-secondary btn-sm" onclick="window.location.href='form.html'">
+        <button class="btn btn-secondary btn-sm" id="backToFormBtn"
+                onclick="window.location.href='form.html'">
           📝 回到填報
         </button>
         <button class="btn btn-primary btn-sm" onclick="refreshDashboard()" id="refreshBtn">
           🔄 重新整理
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="handleDashboardLogout()">
+          ← 登出
         </button>
       </div>
     </div>
@@ -350,6 +354,7 @@
     let rawRecords = [];   // 套用篩選後的資料（所有圖表與名單都看這一份）
     let activeQuestions = [];
     let currentList = [];  // 目前展開的名單
+    let viewerInfo = null; // 後端回傳的檢視者資訊（角色、可看的分隊）
     let currentListKey = '';
 
     // ─── 高風險條件定義 ────────────────────────────────────────
@@ -421,10 +426,15 @@
       if (!user) return;
 
       const role = String(user.role || '志工').trim();
-      if (role !== '管理員' && role !== '分隊承辦人') {
-        alert('本頁面僅限管理員與分隊承辦人檢視。');
+      if (!['管理員', '大隊承辦人', '分隊承辦人'].includes(role)) {
+        alert('本頁面僅限管理員、大隊承辦人與分隊承辦人檢視。');
         window.location.href = 'form.html';
         return;
+      }
+
+      // 大隊承辦人只負責督導、不填訪視表，隱藏「回到填報」入口
+      if (role === '大隊承辦人') {
+        document.getElementById('backToFormBtn')?.classList.add('hidden');
       }
 
       // 分隊承辦人只看得到自己分隊，鎖住分隊篩選避免誤會
@@ -486,6 +496,8 @@
           return;
         }
 
+        viewerInfo = res.viewer || null;
+
         if (res.data && res.data.length > 0) {
           allRecords = res.data;
           isRealData = true;
@@ -500,6 +512,7 @@
         }
       }
 
+      renderViewerInfo();
       buildFilterOptions();
       buildRiskCriteriaUI();
 
@@ -523,6 +536,21 @@
 
       refreshBtn.disabled = false;
       refreshBtn.textContent = '🔄 重新整理';
+    }
+
+    function handleDashboardLogout() {
+      Session.clear();
+      window.location.href = 'index.html';
+    }
+
+    // 於標題列顯示目前檢視者與資料範圍
+    function renderViewerInfo() {
+      const el = document.getElementById('viewerInfoText');
+      if (!el || !viewerInfo) return;
+      const scope = viewerInfo.branches === null || viewerInfo.branches === undefined
+        ? '全部分隊'
+        : (viewerInfo.branches.length > 0 ? viewerInfo.branches.join('、') : '無可檢視分隊');
+      el.textContent = `${viewerInfo.name}｜${viewerInfo.role}｜可檢視：${scope}`;
     }
 
     // ─── 篩選 ────────────────────────────────────────────────
@@ -572,7 +600,12 @@
       const sel = document.getElementById('filterBranch');
       if (sel.disabled) return;                    // 分隊承辦人已鎖定為本分隊
       const current = sel.value;
-      const branches = Array.from(new Set(allRecords.map(r => r.branch).filter(Boolean))).sort();
+
+      // 以後端允許檢視的分隊為準（大隊承辦人＝所屬大隊底下所有單位），
+      // 沒有限制時（管理員）則由實際資料推導
+      const allowed = Array.isArray(viewerInfo?.branches) ? viewerInfo.branches : null;
+      const fromData = Array.from(new Set(allRecords.map(r => r.branch).filter(Boolean)));
+      const branches = Array.from(new Set(allowed ? allowed.concat(fromData) : fromData)).sort();
       sel.innerHTML = '<option value="">全部分隊</option>';
       branches.forEach(b => {
         const o = document.createElement('option');

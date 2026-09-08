@@ -118,9 +118,11 @@
 <script>
   // ─── 頁面初始化 ───────────────────────────────────────────
   async function init() {
-    // 若已登入，直接跳轉表單頁
-    if (Session.get()) {
-      window.location.href = 'form.html';
+    // 若已登入，直接跳轉（大隊承辦人只查閱督導，進儀表板）
+    const s = Session.get();
+    if (s) {
+      window.location.href =
+        String(s.role || '').trim() === '大隊承辦人' ? 'dashboard.html' : 'form.html';
       return;
     }
   }
@@ -185,7 +187,10 @@
         document.getElementById('loginBtnIcon').textContent = '✅';
         document.getElementById('loginBtnText').textContent = '驗證成功，正在進入...';
 
-        setTimeout(() => { window.location.href = 'form.html'; }, 700);
+        // 大隊承辦人只查閱督導、不填訪視表，登入後直接進儀表板
+        const landing = String(res.user.role || '').trim() === '大隊承辦人'
+          ? 'dashboard.html' : 'form.html';
+        setTimeout(() => { window.location.href = landing; }, 700);
 
       } else if (res.needNameDisambiguation) {
         // 重重複名稱處理：填入下拉選單

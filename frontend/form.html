@@ -269,8 +269,14 @@
     document.getElementById('userInfo').textContent =
       `${session.name}｜${session.branch}`;
 
-    // 統計儀表板含案家個資，僅管理員與分隊承辦人顯示入口
+    // 大隊承辦人只負責查閱督導、不填寫訪視紀錄，直接導向儀表板
     const role = String(session.role || '志工').trim();
+    if (role === '大隊承辦人') {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+
+    // 統計儀表板含案家個資，僅管理員與分隊承辦人顯示入口
     if (role === '管理員' || role === '分隊承辦人') {
       document.getElementById('dashboardBtn').classList.remove('hidden');
     }
