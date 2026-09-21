@@ -214,7 +214,7 @@ header(s, "一頁看懂這套系統", "若只看一頁，請看這三點")
 cards = [
     ("做了什麼", "把居家訪視紙本表單全面數位化。\n志工到案家用手機逐題點選，\n離開前當場送出，資料立即入庫。", GREEN),
     ("帶來什麼", "不只產生統計數字，更直接產出\n「哪幾戶要回去處理」的工作名單，\n可匯出交辦分隊執行。", BLUE),
-    ("花了多少", "運用本局既有 Google 帳號與\n免費網頁代管，無軟體授權費、\n無伺服器採購、無委外維護費。", PURPLE),
+    ("花了多少", "機關端零支出：無軟體授權費、\n無伺服器採購、無委外維護費。\n目前由承辦人以個人帳號及\n自費訂閱之雲端服務維持運作。", PURPLE),
 ]
 bx, bw = Inches(0.9), Inches(3.72)
 for i, (t, d, c) in enumerate(cards):
@@ -278,9 +278,44 @@ for i, (tag, t, d, c) in enumerate(flow):
         ar.line.fill.background(); ar.shadow.inherit = False
 
 callout(s, Inches(0.95), Inches(4.75), Inches(11.45), Inches(1.75), "技術選擇的考量",
-        ["全部採用本局既有的 Google 服務（試算表＋Apps Script），前端以免費靜態網頁代管，",
-         "不需採購伺服器、不需資料庫維護、不需委外年度維護費；",
-         "資料仍存放於本局自有的 Google 試算表中，隨時可自行匯出備份。"],
+        ["以 Google 試算表與 Apps Script 建置，前端採免費靜態網頁代管，",
+         "機關端不需採購伺服器、不需資料庫維護、亦無委外年度維護費用；",
+         "資料以試算表形式保存，可隨時完整匯出備份，不受特定廠商系統綁定。"],
+        accent=NAVY, bg=RGBColor(0xEF, 0xF6, 0xFF), size=13.5)
+footer(s, "志工居家訪視電子化系統　業務簡報")
+
+# ══════════════════════════════════════════════════════════
+# 5  建置與維運成本
+# ══════════════════════════════════════════════════════════
+s = newslide()
+header(s, "建置與維運成本", "本系統自建置至今，未動用機關預算")
+
+rect(s, Inches(0.9), Inches(1.75), Inches(5.6), Inches(3.15), fill=WHITE, linec=GREEN, lw=2)
+rect(s, Inches(0.9), Inches(1.75), Inches(5.6), Inches(0.6), fill=GREEN, radius=False)
+textbox(s, Inches(1.18), Inches(1.9), Inches(5.1), Inches(0.4), [("機關端支出", 18, True, WHITE)])
+yy = Inches(2.6)
+for item in ["軟體授權費：無", "伺服器採購與機房：無",
+             "系統開發標案：無", "年度委外維護費：無"]:
+    d = rect(s, Inches(1.2), yy + Emu(50000), Emu(90000), Emu(90000), fill=GREEN, radius=True)
+    d.adjustments[0] = 0.5
+    textbox(s, Inches(1.48), yy, Inches(4.8), Inches(0.4), [(item, 14.5, False, TEXT)])
+    yy += Inches(0.52)
+
+rect(s, Inches(6.85), Inches(1.75), Inches(5.6), Inches(3.15), fill=WHITE, linec=AMBER, lw=2)
+rect(s, Inches(6.85), Inches(1.75), Inches(5.6), Inches(0.6), fill=AMBER, radius=False)
+textbox(s, Inches(7.13), Inches(1.9), Inches(5.1), Inches(0.4), [("目前由承辦人自行負擔", 18, True, WHITE)])
+yy = Inches(2.6)
+for main, note in [("雲端儲存空間訂閱", "系統資料庫與簽名檔存放所需"),
+                   ("AI 開發工具訂閱", "系統開發、功能擴充與後續調整")]:
+    d = rect(s, Inches(7.15), yy + Emu(50000), Emu(90000), Emu(90000), fill=AMBER, radius=True)
+    d.adjustments[0] = 0.5
+    textbox(s, Inches(7.43), yy, Inches(4.8), Inches(0.75),
+            [(main, 14.5, True, TEXT), (note, 12.5, False, MUTED)])
+    yy += Inches(0.95)
+
+callout(s, Inches(0.9), Inches(5.2), Inches(11.55), Inches(1.3), "說明",
+        ["本系統之雲端儲存空間與開發工具費用，目前均由承辦人自行訂閱負擔，未向機關請領。",
+         "相較於委外開發，除節省開發與年度維護經費外，亦免除招標、驗收與需求變更之行政作業。"],
         accent=NAVY, bg=RGBColor(0xEF, 0xF6, 0xFF), size=13.5)
 footer(s, "志工居家訪視電子化系統　業務簡報")
 
@@ -395,7 +430,7 @@ bullets(s, Inches(0.9), Inches(1.8), Inches(11.5),
         [("查詢統計資料必須通過身分驗證", "由後端逐次驗證身分，非僅前端隱藏畫面；未通過者無法取得任何資料"),
          ("依角色限縮資料範圍", "分隊承辦人僅能取得本隊資料，系統於後端即過濾，無法藉由網址繞過"),
          ("志工端不開放統計功能", "志工僅能填報，看不到彙整名單與其他案家資料"),
-         ("資料存放於本局自有試算表", "未經第三方平台儲存，可自行控管存取權限與備份")],
+         ("資料以試算表形式自行保管", "未委由第三方廠商代管，存取權限可自行控管，並可隨時匯出備份")],
         size=15, color=RED, gap=Inches(0.56))
 
 callout(s, Inches(0.9), Inches(5.15), Inches(11.55), Inches(1.35), "使用規範建議",
