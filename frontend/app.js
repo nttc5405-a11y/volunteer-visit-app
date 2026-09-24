@@ -37,14 +37,27 @@ const API = {
     url.searchParams.set('action', action);
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      cache: 'no-cache',
-    });
+    // Google Apps Script 在冷啟動或忙碌時會間歇性回 404／5xx（實測確有發生），
+    // 因此失敗時自動重試。此處所有 action 皆為唯讀查詢，重試不會造成重複寫入；
+    // 送出訪視紀錄走的是下方的 post()，不適用重試。
+    const MAX_RETRY = 2;
+    let lastErr;
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    return json;
+    for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 800 * attempt));
+        console.warn(`「${action}」連線失敗，重試第 ${attempt} 次…`);
+      }
+      try {
+        const res = await fetch(url.toString(), { method: 'GET', cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    throw lastErr;
   },
 
   /**
@@ -109,20 +122,55 @@ const API = {
 // 沒有任何公告時整條隱藏；公告載入失敗也只是不顯示，不影響其他功能。
 // ============================================================
 const Marquee = {
-  /** page：填報頁 / 儀表板 */
-  async load(page) {
+  CACHE_TTL: 5 * 60 * 1000,   // 公告不常變，5 分鐘內重複開頁直接用快取，不再打 API
+
+  /**
+   * @param {string} page   登入頁 / 填報頁 / 儀表板
+   * @param {number} delay  延後幾毫秒才向後端查詢。登入頁會設定延遲，
+   *                        讓使用者按下登入時，驗證請求不必排在公告請求後面。
+   */
+  async load(page, delay = 0) {
     const bar = document.getElementById('marquee');
     if (!bar) return;
+
+    // 快取仍在有效期內就直接用，完全不連線。
+    // 這能明顯減少 Apps Script 的請求量（登入頁尤其重要），
+    // 代價是公告改動後最多 5 分鐘才會反映，對公告而言可以接受。
+    const cached = Marquee.readCache(page);
+    if (cached) {
+      Marquee.render(cached);
+      return;
+    }
+
+    if (delay) await new Promise(r => setTimeout(r, delay));
 
     try {
       const res = await API.getAnnouncements(page);
       const items = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+      Marquee.writeCache(page, items);
       Marquee.render(items);
     } catch (err) {
-      console.warn('公告載入失敗，略過跑馬燈：', err.message);
+      // 公告失敗不影響主要功能，靜默隱藏即可
+      console.warn('公告載入失敗：', err.message);
       bar.classList.add('hidden');
       document.body.classList.remove('has-marquee');
     }
+  },
+
+  readCache(page) {
+    try {
+      const raw = sessionStorage.getItem('vas_ann_' + page);
+      if (!raw) return null;
+      const box = JSON.parse(raw);
+      if (Date.now() - box.t > Marquee.CACHE_TTL) return null;
+      return Array.isArray(box.d) ? box.d : null;
+    } catch (_) { return null; }
+  },
+
+  writeCache(page, items) {
+    try {
+      sessionStorage.setItem('vas_ann_' + page, JSON.stringify({ t: Date.now(), d: items }));
+    } catch (_) { /* 無痕模式等情況存不了，略過即可 */ }
   },
 
   render(items) {
@@ -160,28 +208,27 @@ const Marquee = {
   },
 
   /**
-   * 量測內容寬度，決定要複製幾份才能填滿畫面並無縫接續，並設定捲動距離與速度。
+   * 設定捲動起點、終點與速度。
+   * 公告只保留一份：從畫面右緣進場、往左跑完後離場再重來，
+   * 因此同一時間只會看到一次內容，不會整排重複。
    * 量不到寬度（頁面尚未排版）時直接返回，等下次事件再試。
    */
   fit(track) {
     if (!track) return;
-    const first = track.querySelector('.marquee-text');
-    if (!first) return;
+    const text = track.querySelector('.marquee-text');
+    if (!text) return;
 
-    const unit = first.getBoundingClientRect().width;
+    const unit = text.getBoundingClientRect().width;
     const view = track.parentElement ? track.parentElement.getBoundingClientRect().width : 0;
-    if (!unit) return;
+    if (!unit || !view) return;
 
-    // 先還原成一份，避免重複呼叫時越複製越多
+    // 保險：確保只有一份內容（舊版曾複製多份）
     while (track.children.length > 1) track.removeChild(track.lastChild);
 
-    const copies = Math.max(2, Math.ceil((view * 2) / unit));
-    for (let i = 1; i < copies; i++) track.appendChild(first.cloneNode(true));
-
-    // 捲動一份內容的距離後，畫面看起來與起點相同，因此是連續的
-    track.style.setProperty('--marquee-shift', unit + 'px');
-    // 速度固定約每秒 60px：內容越長跑越久，閱讀節奏一致
-    track.style.animationDuration = Math.max(8, Math.round(unit / 60)) + 's';
+    track.style.setProperty('--marquee-start', view + 'px');   // 起點：畫面右緣外
+    track.style.setProperty('--marquee-shift', unit + 'px');   // 終點：完全離開左緣
+    // 速度固定約每秒 60px，內容越長跑越久，閱讀節奏一致
+    track.style.animationDuration = Math.max(8, Math.round((view + unit) / 60)) + 's';
   },
 };
 

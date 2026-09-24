@@ -1166,12 +1166,12 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   animation: marquee-scroll linear infinite;
 }
 .marquee-text {
-  padding-right: 3rem;
   font-size: 0.85rem;
   font-weight: 600;
 }
+/* 由畫面右緣進場，往左跑到完全離開，再從右邊重來（同時只會看到一次內容） */
 @keyframes marquee-scroll {
-  from { transform: translateX(0); }
+  from { transform: translateX(var(--marquee-start, 100%)); }
   to   { transform: translateX(calc(-1 * var(--marquee-shift, 100%))); }
 }
 /* 滑過或以鍵盤聚焦時暫停，方便看清楚內容 */
