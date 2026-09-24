@@ -134,10 +134,10 @@
       return;
     }
 
-    // 公告不阻塞登入流程。延後 1.5 秒再查詢，讓使用者立即按下登入時，
-    // 驗證請求不必排在公告請求後面（Apps Script 同時間可執行的數量有限）。
-    // 若 sessionStorage 有 5 分鐘內的快取，會先立即顯示，不必等這 1.5 秒。
-    Marquee.load('登入頁', 1500);
+    // 立刻喚醒後端：使用者輸入末三碼的這段時間拿來暖機，
+    // 按下登入時就不必再等 Apps Script 啟動（冷啟動實測約 30 秒）。
+    // 暖機完成後才載入公告，避免兩個請求互相排隊。
+    API.warmUp().finally(() => Marquee.load('登入頁'));
   }
 
   // ─── 登入處理 ─────────────────────────────────────────────
@@ -181,9 +181,22 @@
     document.getElementById('loginBtnIcon').textContent = '⏳';
     document.getElementById('loginBtnText').textContent = '驗證中...';
 
+    // 系統久未使用時，後端啟動需要較久。等太久要讓使用者知道還在跑，
+    // 否則會以為當掉而重複點擊。
+    const slowHints = [
+      setTimeout(() => {
+        document.getElementById('loginBtnText').textContent = '驗證中，系統啟動中請稍候...';
+      }, 6000),
+      setTimeout(() => {
+        document.getElementById('loginBtnText').textContent = '首次使用需較久，請勿關閉頁面...';
+      }, 15000),
+    ];
+    const clearHints = () => slowHints.forEach(clearTimeout);
+
     try {
       // 呼叫 API：如果需要核對則 name 傳空，否則傳選取的 name
       const res = await API.verifyLogin(idCard, phone, name);
+      clearHints();
 
       if (res.success) {
         // 一併保留登入代碼：儀表板含個資，開啟時需再向後端驗證一次身分。
@@ -226,7 +239,8 @@
       }
 
     } catch (err) {
-      _showError('連線失敗：' + err.message + '（請確認網路）');
+      clearHints();
+      _showError('連線失敗：' + err.message + '，請再按一次登入');
       _resetBtn();
     }
 
@@ -241,6 +255,7 @@
     }
 
     function _resetBtn() {
+      clearHints();
       loginBtn.disabled = false;
       document.getElementById('loginBtnIcon').textContent = '🔓';
       document.getElementById('loginBtnText').textContent = '進入填寫系統';

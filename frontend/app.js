@@ -28,7 +28,20 @@ const API = {
    * @param {string} action
    * @param {Object} params
    */
-  async get(action, params = {}) {
+  /**
+   * 預先喚醒後端。
+   * Apps Script 閒置後第一個請求要等執行環境啟動（實測約 30 秒），
+   * 暖機後只需 3～4 秒。登入頁一載入就先打一次，
+   * 使用者輸入末三碼的這段時間剛好用來暖機，按下登入時就不必再等。
+   * 失敗無所謂，不影響任何功能。
+   */
+  async warmUp() {
+    try {
+      await API.get('getBranches', {}, { retries: 0, timeoutMs: 40000 });
+    } catch (_) { /* 暖機失敗就算了 */ }
+  },
+
+  async get(action, params = {}, { retries = 2, timeoutMs = 30000 } = {}) {
     if (!CONFIG.GAS_API_URL || CONFIG.GAS_API_URL === 'YOUR_GAS_WEB_APP_URL_HERE') {
       throw new Error('尚未設定 GAS_API_URL，請參閱 README.md 完成部署設定。');
     }
@@ -40,20 +53,31 @@ const API = {
     // Google Apps Script 在冷啟動或忙碌時會間歇性回 404／5xx（實測確有發生），
     // 因此失敗時自動重試。此處所有 action 皆為唯讀查詢，重試不會造成重複寫入；
     // 送出訪視紀錄走的是下方的 post()，不適用重試。
-    const MAX_RETRY = 2;
     let lastErr;
 
-    for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
       if (attempt > 0) {
         await new Promise(r => setTimeout(r, 800 * attempt));
         console.warn(`「${action}」連線失敗，重試第 ${attempt} 次…`);
       }
       try {
-        const res = await fetch(url.toString(), { method: 'GET', cache: 'no-cache' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+        // 設逾時上限：實測曾出現卡住 48 秒才回 404 的情況，
+        // 沒有上限的話使用者會一直空等
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          const res = await fetch(url.toString(), {
+            method: 'GET', cache: 'no-cache', signal: ctrl.signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return await res.json();
+        } finally {
+          clearTimeout(timer);
+        }
       } catch (err) {
-        lastErr = err;
+        lastErr = err.name === 'AbortError'
+          ? new Error(`連線逾時（超過 ${Math.round(timeoutMs / 1000)} 秒）`)
+          : err;
       }
     }
 
