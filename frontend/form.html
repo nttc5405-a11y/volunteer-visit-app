@@ -132,13 +132,17 @@
       </div>
 
       <!-- 房屋與居住資訊 -->
-      <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 16px;">
+      <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px;">
         <div class="form-group">
           <label class="form-label" for="houseAge">
             🏚️ 房屋屋齡 (年)
           </label>
-          <input type="number" class="form-input" id="houseAge"
-                 placeholder="屋齡" min="0" oninput="updateProgress()">
+          <div class="num-stepper">
+            <button type="button" class="num-btn" data-step="-1" aria-label="房屋屋齡減少">−</button>
+            <input type="number" class="form-input" id="houseAge" inputmode="numeric"
+                   placeholder="屋齡" min="0" oninput="updateProgress()">
+            <button type="button" class="num-btn" data-step="1" aria-label="房屋屋齡增加">＋</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="residentialType">
@@ -163,20 +167,28 @@
         </div>
       </div>
 
-      <div class="form-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px;">
+      <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 12px;">
         <div class="form-group">
           <label class="form-label" for="totalFloors">
             🏢 建物總層數
           </label>
-          <input type="number" class="form-input" id="totalFloors"
-                 placeholder="總層數" min="1" oninput="updateProgress()">
+          <div class="num-stepper">
+            <button type="button" class="num-btn" data-step="-1" aria-label="建物總層數減少">−</button>
+            <input type="number" class="form-input" id="totalFloors" inputmode="numeric"
+                   placeholder="總層數" min="1" oninput="updateProgress()">
+            <button type="button" class="num-btn" data-step="1" aria-label="建物總層數增加">＋</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="residingFloor">
             📍 居住樓層
           </label>
-          <input type="number" class="form-input" id="residingFloor"
-                 placeholder="居住樓層" min="1" oninput="updateProgress()">
+          <div class="num-stepper">
+            <button type="button" class="num-btn" data-step="-1" aria-label="居住樓層減少">−</button>
+            <input type="number" class="form-input" id="residingFloor" inputmode="numeric"
+                   placeholder="居住樓層" min="1" oninput="updateProgress()">
+            <button type="button" class="num-btn" data-step="1" aria-label="居住樓層增加">＋</button>
+          </div>
         </div>
       </div>
 
@@ -185,26 +197,46 @@
         <div style="font-weight: bold; font-size: 0.9rem; color: var(--c-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
           👨‍👩‍👧‍👦 家庭成員結構 (請輸入人數，若無填 0)
         </div>
-        <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px;">
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 0.75rem;" for="familySize">總人數</label>
-            <input type="number" class="form-input" id="familySize" value="0" min="0" oninput="updateProgress()">
+        <div class="family-list">
+          <div class="family-row">
+            <label class="family-label" for="familySize">總人數</label>
+            <div class="num-stepper">
+              <button type="button" class="num-btn" data-step="-1" aria-label="總人數減少">−</button>
+              <input type="number" class="form-input" id="familySize" inputmode="numeric" value="0" min="0" oninput="updateProgress()">
+              <button type="button" class="num-btn" data-step="1" aria-label="總人數增加">＋</button>
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 0.75rem;" for="family65Plus">65歲以上</label>
-            <input type="number" class="form-input" id="family65Plus" value="0" min="0" oninput="updateProgress()">
+          <div class="family-row">
+            <label class="family-label" for="family65Plus">65歲以上</label>
+            <div class="num-stepper">
+              <button type="button" class="num-btn" data-step="-1" aria-label="65歲以上人數減少">−</button>
+              <input type="number" class="form-input" id="family65Plus" inputmode="numeric" value="0" min="0" oninput="updateProgress()">
+              <button type="button" class="num-btn" data-step="1" aria-label="65歲以上人數增加">＋</button>
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 0.75rem;" for="familyDisabled">行動不便</label>
-            <input type="number" class="form-input" id="familyDisabled" value="0" min="0" oninput="updateProgress()">
+          <div class="family-row">
+            <label class="family-label" for="familyDisabled">行動不便</label>
+            <div class="num-stepper">
+              <button type="button" class="num-btn" data-step="-1" aria-label="行動不便人數減少">−</button>
+              <input type="number" class="form-input" id="familyDisabled" inputmode="numeric" value="0" min="0" oninput="updateProgress()">
+              <button type="button" class="num-btn" data-step="1" aria-label="行動不便人數增加">＋</button>
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 0.75rem;" for="familyUnder6">6歲以下</label>
-            <input type="number" class="form-input" id="familyUnder6" value="0" min="0" oninput="updateProgress()">
+          <div class="family-row">
+            <label class="family-label" for="familyUnder6">6歲以下</label>
+            <div class="num-stepper">
+              <button type="button" class="num-btn" data-step="-1" aria-label="6歲以下人數減少">−</button>
+              <input type="number" class="form-input" id="familyUnder6" inputmode="numeric" value="0" min="0" oninput="updateProgress()">
+              <button type="button" class="num-btn" data-step="1" aria-label="6歲以下人數增加">＋</button>
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 0.75rem;" for="familyForeigner">外籍人士</label>
-            <input type="number" class="form-input" id="familyForeigner" value="0" min="0" oninput="updateProgress()">
+          <div class="family-row">
+            <label class="family-label" for="familyForeigner">外籍人士</label>
+            <div class="num-stepper">
+              <button type="button" class="num-btn" data-step="-1" aria-label="外籍人士人數減少">−</button>
+              <input type="number" class="form-input" id="familyForeigner" inputmode="numeric" value="0" min="0" oninput="updateProgress()">
+              <button type="button" class="num-btn" data-step="1" aria-label="外籍人士人數增加">＋</button>
+            </div>
           </div>
         </div>
       </div>
@@ -798,14 +830,18 @@
 
       case '數字題':
         return `
-          <input type="number"
-                 class="form-input q-num-input"
-                 id="nb-${q.id}"
-                 inputmode="numeric"
-                 min="0"
-                 placeholder="請輸入數字"
-                 aria-label="${q.content}"
-                 oninput="handleTextAnswer('${q.id}', this.value)">`;
+          <div class="num-stepper">
+            <button type="button" class="num-btn" data-step="-1" aria-label="數值減少">−</button>
+            <input type="number"
+                   class="form-input q-num-input"
+                   id="nb-${q.id}"
+                   inputmode="numeric"
+                   min="0"
+                   placeholder="請輸入數字"
+                   aria-label="${q.content}"
+                   oninput="handleTextAnswer('${q.id}', this.value)">
+            <button type="button" class="num-btn" data-step="1" aria-label="數值增加">＋</button>
+          </div>`;
 
       default:
         return `<p class="text-muted text-sm">⚠️ 不支援的題型：${q.type}</p>`;
@@ -1065,6 +1101,31 @@
 
     window.location.href = 'preview.html';
   }
+
+  // ─── 數字欄位的加減按鈕 ───────────────────────────────────────
+  // 手機瀏覽器不會顯示 type="number" 的上下箭頭，志工只能叫鍵盤打字。
+  // 這裡用事件委派接管全頁（含題庫動態產生的數字題）的加減按鈕。
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.num-btn');
+    if (!btn) return;
+
+    const input = btn.parentElement.querySelector('input[type=number]');
+    if (!input) return;
+
+    const min  = input.min === '' ? 0 : Number(input.min);
+    const max  = input.max === '' ? Infinity : Number(input.max);
+    const step = Number(btn.dataset.step) || 1;
+
+    const current = parseInt(input.value, 10);
+    // 空白欄位第一次按，直接給最小值（例：居住樓層按一下就是 1）
+    let next = isNaN(current) ? min : current + step;
+    next = Math.min(max, Math.max(min, next));
+    input.value = next;
+
+    // 按鈕改值不會觸發 oninput，要自己補送事件，
+    // 否則進度條與題目答案不會跟著更新。
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 
   // ─── 掛載 ────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', init);

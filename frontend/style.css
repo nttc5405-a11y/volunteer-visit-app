@@ -1192,3 +1192,75 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 
 /* 登入頁是滿版置中版面，有跑馬燈時高度要扣掉，避免整頁多出捲軸 */
 body.has-marquee .login-page { min-height: calc(100vh - 2.6rem); }
+
+/* ============================================================
+   數字欄位的加減按鈕（手機不會顯示原生上下箭頭，改用大按鈕）
+   ============================================================ */
+.num-stepper { display: flex; align-items: stretch; gap: 8px; }
+
+.num-stepper .form-input {
+  flex: 1;
+  min-width: 0;            /* Flex 子項預設 min-width:auto，會把版面撐開 */
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.num-btn {
+  flex: none;
+  width: 52px;
+  min-height: 52px;        /* 手指點擊安全尺寸 */
+  border: 2px solid var(--border);
+  border-radius: var(--r-md);
+  background: #fff;
+  color: var(--c-primary);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;   /* 避免連點兩下被當成放大手勢 */
+  transition: var(--transition);
+}
+.num-btn:active {
+  background: var(--c-primary);
+  color: #fff;
+  border-color: var(--c-primary);
+}
+.num-btn:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
+/* 桌機原生的上下小箭頭改由上面的按鈕取代，兩邊畫面才一致 */
+.num-stepper input[type=number]::-webkit-outer-spin-button,
+.num-stepper input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.num-stepper input[type=number] { -moz-appearance: textfield; }
+
+/* 家庭成員結構：一項一列（標籤在左、加減在右），寬螢幕再排成兩欄 */
+/* 欄寬不足 270px 時自動退回單欄，避免標籤被擠成直式換行 */
+.family-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 10px 24px;
+}
+.family-row { display: flex; align-items: center; gap: 10px; }
+.family-row .family-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.family-row .num-stepper { flex: none; width: 176px; }
