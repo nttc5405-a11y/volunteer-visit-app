@@ -197,33 +197,58 @@ const Marquee = {
 
     Marquee.fit(track);
 
-    // 頁面在背景分頁載入時量不到寬度，切回前景或視窗改變大小時再量一次。
-    // 轉動手機方向也需要重新計算要複製幾份。
+    // 可用寬度改變時要重新判斷（轉動手機方向、視窗縮放、分割畫面）。
+    // 用 ResizeObserver 直接監看容器本身，比 window resize 事件可靠
+    // ——實測某些情況下視窗尺寸變了卻不會觸發 resize，導致停在錯誤的模式。
     if (!Marquee._bound) {
       Marquee._bound = true;
       const refit = () => Marquee.fit(document.getElementById('marqueeTrack'));
-      document.addEventListener('visibilitychange', refit);
-      window.addEventListener('resize', refit);
+
+      // 必須保留 observer 的參考：沒有變數指向它時，
+      // 瀏覽器可能將其回收，導致尺寸改變後不再觸發（實測發生過）
+      if (typeof ResizeObserver !== 'undefined' && track.parentElement) {
+        Marquee._observer = new ResizeObserver(refit);
+        Marquee._observer.observe(track.parentElement);
+      }
+      window.addEventListener('resize', refit);             // 舊瀏覽器的後備
+      window.addEventListener('orientationchange', refit);  // 手機轉向
+      document.addEventListener('visibilitychange', refit); // 背景分頁載入時量不到寬度
+
+      // 字型載入完成後文字寬度會變，且某些情況下初次量測會偏早，
+      // 因此稍後再量一次（不依賴畫面更新迴圈）
+      setTimeout(refit, 1200);
     }
   },
 
   /**
-   * 設定捲動起點、終點與速度。
-   * 公告只保留一份：從畫面右緣進場、往左跑完後離場再重來，
-   * 因此同一時間只會看到一次內容，不會整排重複。
+   * 依內容長度自動決定顯示方式：
+   *   • 一行放得下 → 靜止顯示，使用者隨時看得到完整內容
+   *   • 放不下     → 捲動顯示，自畫面右緣進場、跑完離場再重來
+   * 公告只保留一份，同一時間不會出現重複的文字。
    * 量不到寬度（頁面尚未排版）時直接返回，等下次事件再試。
    */
   fit(track) {
     if (!track) return;
     const text = track.querySelector('.marquee-text');
-    if (!text) return;
+    const bar  = track.closest('.marquee');
+    if (!text || !bar) return;
 
     const unit = text.getBoundingClientRect().width;
     const view = track.parentElement ? track.parentElement.getBoundingClientRect().width : 0;
     if (!unit || !view) return;
 
-    // 保險：確保只有一份內容（舊版曾複製多份）
+    // 保險：確保只有一份內容
     while (track.children.length > 1) track.removeChild(track.lastChild);
+
+    const fits = unit <= view - 4;          // 留幾像素邊距，避免貼邊看起來被切到
+    bar.classList.toggle('marquee-static', fits);
+
+    if (fits) {
+      track.style.removeProperty('--marquee-start');
+      track.style.removeProperty('--marquee-shift');
+      track.style.animationDuration = '';
+      return;
+    }
 
     track.style.setProperty('--marquee-start', view + 'px');   // 起點：畫面右緣外
     track.style.setProperty('--marquee-shift', unit + 'px');   // 終點：完全離開左緣

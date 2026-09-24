@@ -1174,6 +1174,12 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   from { transform: translateX(var(--marquee-start, 100%)); }
   to   { transform: translateX(calc(-1 * var(--marquee-shift, 100%))); }
 }
+/* 內容一行放得下時靜止顯示，不捲動（由 Marquee.fit 自動判斷後加上此類別）*/
+.marquee.marquee-static .marquee-track {
+  animation: none;
+  transform: none;
+}
+
 /* 滑過或以鍵盤聚焦時暫停，方便看清楚內容 */
 .marquee:hover .marquee-track,
 .marquee:focus-within .marquee-track { animation-play-state: paused; }
