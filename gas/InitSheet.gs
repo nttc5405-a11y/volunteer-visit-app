@@ -3,18 +3,19 @@
  *
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  可執行的函式列表：                                           ║
- * ║  1. initializeSheets()     → 建立主資料庫的 4 張工作表        ║
+ * ║  1. initializeSheets()     → 建立主資料庫的 5 張工作表        ║
  * ║  2. createBranchSheets()   → 自動建立 3 個分隊專屬試算表      ║
  * ║  3. syncQuestionColumns()  → 題庫增減題目後同步紀錄表欄位     ║
  * ║  4. fillDefaultSuggestionRules() → 填入預設的答否連動規則     ║
- * ║  5. resetAllSheets()       → 重置所有資料（謹慎使用）         ║
+ * ║  5. createAnnouncementSheet()  → 建立跑馬燈公告工作表         ║
+ * ║  6. resetAllSheets()       → 重置所有資料（謹慎使用）         ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
  * ===== 使用方式 =====
  * 在 Google Apps Script 編輯器中，
  * 選擇函式「initializeSheets」，點擊執行（▶）。
  * 首次執行需授予試算表存取權限。
- * 執行完成後，4 張工作表與所有範例資料將自動建立完成。
+ * 執行完成後，5 張工作表與所有範例資料將自動建立完成。
  * ====================
  */
 
@@ -129,7 +130,83 @@ function onOpen() {
     .createMenu('志工訪視系統')
     .addItem('🔄 同步題庫欄位', 'syncQuestionColumns')
     .addItem('📋 填入預設連動規則', 'fillDefaultSuggestionRules')
+    .addItem('📢 建立系統公告表（跑馬燈）', 'createAnnouncementSheet')
     .addToUi();
+}
+
+// ============================================================
+// 建立「系統公告」工作表（跑馬燈內容）
+//
+// 已存在時不覆蓋內容，只確認欄位齊全。
+// ============================================================
+function createAnnouncementSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+
+  var existed = !!ss.getSheetByName('系統公告');
+  _createAnnouncementSheet(ss);
+
+  var msg = existed
+    ? '✅ 「系統公告」工作表已存在，內容未更動。'
+    : '✅ 已建立「系統公告」工作表。';
+  msg += '\n\n在「公告內容」欄填入文字，志工端下次載入頁面即會顯示跑馬燈。'
+       + '\n內容留空、或「啟用」欄填 FALSE，該則就不會顯示；'
+       + '\n全部都沒有內容時，跑馬燈整條隱藏。'
+       + '\n\n修改公告不需要重新部署。';
+
+  Logger.log(msg);
+  if (ui) ui.alert(msg);
+}
+
+function _createAnnouncementSheet(ss) {
+  var sheet = ss.getSheetByName('系統公告');
+  if (sheet) {
+    // 已存在：只補缺少的欄位標題，不動既有內容
+    var lastCol = sheet.getLastColumn();
+    var headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+    var need = ['公告內容', '啟用', '顯示頁面'];
+    var missing = need.filter(function(h) {
+      return headers.map(function(x) { return String(x).trim(); }).indexOf(h) === -1;
+    });
+    if (missing.length > 0) {
+      sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
+      _styleHeader(sheet, headers.length + missing.length);
+    }
+    return sheet;
+  }
+
+  sheet = ss.insertSheet('系統公告');
+  var headers = ['公告內容', '啟用', '顯示頁面'];
+  sheet.appendRow(headers);
+  _styleHeader(sheet, headers.length);
+  sheet.setFrozenRows(1);
+
+  sheet.getRange('A1').setNote(
+    '要跑馬燈顯示的文字。\n' +
+    '留空即不顯示該則；所有列都留空時，跑馬燈整條隱藏。\n' +
+    '可填多列，會依序輪播。'
+  );
+  sheet.getRange('B1').setNote(
+    '填 FALSE 表暫停顯示（內容保留，之後改回 TRUE 即可再用）。\n' +
+    '留空或 TRUE 表顯示中。'
+  );
+  sheet.getRange('C1').setNote(
+    '要顯示在哪些頁面：\n' +
+    '留空或填「全部」→ 填報頁與儀表板都顯示\n' +
+    '填「填報頁」→ 只給志工看\n' +
+    '填「儀表板」→ 只給承辦人看'
+  );
+
+  // 範例列：預設關閉，承辦人改內容並把啟用改成 TRUE 即可使用
+  sheet.appendRow(['（範例）本月訪視重點：加強宣導住宅用火災警報器設置', false, '全部']);
+
+  sheet.setColumnWidth(1, 520);
+  sheet.setColumnWidth(2, 70);
+  sheet.setColumnWidth(3, 110);
+
+  Logger.log('✓ 系統公告 建立完成');
+  return sheet;
 }
 
 // ============================================================
@@ -214,6 +291,7 @@ function initializeSheets() {
   _createVisitRecordSheet(ss);
   _createMemberSheet(ss);
   _createBranchSheet(ss);
+  _createAnnouncementSheet(ss);
 
   // 刪除預設的 "工作表1"（如存在）
   var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
@@ -221,7 +299,7 @@ function initializeSheets() {
     ss.deleteSheet(defaultSheet);
   }
 
-  Logger.log('✅ 初始化完成！4 張工作表已建立，範例資料已填入。');
+  Logger.log('✅ 初始化完成！5 張工作表已建立，範例資料已填入。');
 
   try {
     SpreadsheetApp.getUi().alert(
@@ -230,7 +308,8 @@ function initializeSheets() {
       '• 訪視紀錄表\n' +
       '• 人員帳號管理（7 筆範例人員）\n' +
       '• 分隊對照表（3 個分隊）\n' +
-      '• 訪視題庫（5 題範例題目）\n\n' +
+      '• 訪視題庫（防火 25 題、防災 18 題）\n' +
+      '• 系統公告（跑馬燈，預設為關閉的範例）\n\n' +
       '請接著部署 Code.gs 為 Web App 取得 API 網址。'
     );
   } catch (e) {

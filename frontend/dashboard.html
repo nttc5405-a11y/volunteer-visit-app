@@ -38,6 +38,14 @@
     </div>
   </header>
 
+  <!-- 跑馬燈公告：內容來自「系統公告」工作表，沒有公告時整條不顯示 -->
+  <div class="marquee hidden" id="marquee" role="status" aria-live="polite">
+    <span class="marquee-icon" aria-hidden="true">📢</span>
+    <div class="marquee-viewport">
+      <div class="marquee-track" id="marqueeTrack"></div>
+    </div>
+  </div>
+
   <!-- ============ 主頁面內容 ============ -->
   <main class="page-content" style="max-width:1200px; padding-bottom:60px;">
     
@@ -448,6 +456,9 @@
       initMap();
 
       // 2. 獲取數據
+      // 公告不阻塞主流程，載到才顯示
+      Marquee.load('儀表板');
+
       await refreshDashboard();
     });
 

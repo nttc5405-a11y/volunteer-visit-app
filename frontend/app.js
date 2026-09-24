@@ -75,6 +75,8 @@ const API = {
   getMembersByBranch: (branch)      => API.get('getMembersByBranch', { branch }),
   /** 取得分隊列表 */
   getBranches:       ()             => API.get('getBranches'),
+  /** 取得跑馬燈公告（page：填報頁 / 儀表板） */
+  getAnnouncements:  (page)         => API.get('getAnnouncements', { page }),
   /** 登入驗證 */
   verifyLogin:       (idCard, phone, name)  => API.get('verifyLogin', { idCard, phone, name }),
   /** 取得儀表板資料（含個資，需帶登入身分，後端會再驗證一次並依角色過濾） */
@@ -97,6 +99,85 @@ const API = {
       OfflineQueue.add(record);
       return { success: true, offline: true, message: '網路連線失敗，已將此筆紀錄儲存於本機暫存！' };
     }
+  },
+};
+
+// ============================================================
+// 跑馬燈公告
+//
+// 內容維護於 Google 試算表的「系統公告」工作表。
+// 沒有任何公告時整條隱藏；公告載入失敗也只是不顯示，不影響其他功能。
+// ============================================================
+const Marquee = {
+  /** page：填報頁 / 儀表板 */
+  async load(page) {
+    const bar = document.getElementById('marquee');
+    if (!bar) return;
+
+    try {
+      const res = await API.getAnnouncements(page);
+      const items = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+      Marquee.render(items);
+    } catch (err) {
+      console.warn('公告載入失敗，略過跑馬燈：', err.message);
+      bar.classList.add('hidden');
+    }
+  },
+
+  render(items) {
+    const bar   = document.getElementById('marquee');
+    const track = document.getElementById('marqueeTrack');
+    if (!bar || !track) return;
+
+    const texts = (items || []).map(t => String(t).trim()).filter(Boolean);
+    if (texts.length === 0) {          // 沒有公告 → 整條隱藏
+      bar.classList.add('hidden');
+      return;
+    }
+
+    const content = texts.join('　◆　');
+    track.innerHTML = '';
+    const first = document.createElement('span');
+    first.className = 'marquee-text';
+    first.textContent = content;
+    track.appendChild(first);
+    bar.classList.remove('hidden');
+
+    Marquee.fit(track);
+
+    // 頁面在背景分頁載入時量不到寬度，切回前景或視窗改變大小時再量一次。
+    // 轉動手機方向也需要重新計算要複製幾份。
+    if (!Marquee._bound) {
+      Marquee._bound = true;
+      const refit = () => Marquee.fit(document.getElementById('marqueeTrack'));
+      document.addEventListener('visibilitychange', refit);
+      window.addEventListener('resize', refit);
+    }
+  },
+
+  /**
+   * 量測內容寬度，決定要複製幾份才能填滿畫面並無縫接續，並設定捲動距離與速度。
+   * 量不到寬度（頁面尚未排版）時直接返回，等下次事件再試。
+   */
+  fit(track) {
+    if (!track) return;
+    const first = track.querySelector('.marquee-text');
+    if (!first) return;
+
+    const unit = first.getBoundingClientRect().width;
+    const view = track.parentElement ? track.parentElement.getBoundingClientRect().width : 0;
+    if (!unit) return;
+
+    // 先還原成一份，避免重複呼叫時越複製越多
+    while (track.children.length > 1) track.removeChild(track.lastChild);
+
+    const copies = Math.max(2, Math.ceil((view * 2) / unit));
+    for (let i = 1; i < copies; i++) track.appendChild(first.cloneNode(true));
+
+    // 捲動一份內容的距離後，畫面看起來與起點相同，因此是連續的
+    track.style.setProperty('--marquee-shift', unit + 'px');
+    // 速度固定約每秒 60px：內容越長跑越久，閱讀節奏一致
+    track.style.animationDuration = Math.max(8, Math.round(unit / 60)) + 's';
   },
 };
 

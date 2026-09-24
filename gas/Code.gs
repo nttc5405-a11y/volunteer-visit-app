@@ -36,6 +36,9 @@ function doGet(e) {
       case 'getBranches':
         result = getBranches();
         break;
+      case 'getAnnouncements':
+        result = getAnnouncements(params.page);
+        break;
       case 'verifyLogin':
         result = verifyLogin(params.idCard, params.phone, params.name);
         break;
@@ -336,6 +339,54 @@ function getBranches() {
       return { name: b.name, managerEmail: b.managerEmail, corps: b.corps };
     })
   };
+}
+
+// ============================================================
+// 取得跑馬燈公告
+//
+// 內容維護於「系統公告」工作表，欄位：公告內容 / 啟用 / 顯示頁面。
+// 規則：
+//   • 公告內容空白的列 → 略過
+//   • 啟用填 FALSE → 略過（留空或 TRUE 視為啟用）
+//   • 顯示頁面留空或填「全部」→ 各頁面都顯示；否則需含當前頁面名稱
+// 全部略過時回傳空陣列，前端即不顯示跑馬燈。
+// 工作表尚未建立時同樣回傳空陣列，不視為錯誤。
+// ============================================================
+function getAnnouncements(page) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('系統公告');
+  if (!sheet) return { success: true, data: [] };
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { success: true, data: [] };
+
+  var col = { text: 0, enabled: -1, pages: -1 };
+  var names = { '公告內容': 'text', '啟用': 'enabled', '顯示頁面': 'pages' };
+  for (var c = 0; c < data[0].length; c++) {
+    var key = names[String(data[0][c]).trim()];
+    if (key) col[key] = c;
+  }
+
+  var want = String(page || '').trim();
+  var out  = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var text = String(data[i][col.text] || '').trim();
+    if (!text) continue;
+
+    if (col.enabled >= 0) {
+      var v = data[i][col.enabled];
+      if (v === false || String(v).toUpperCase() === 'FALSE') continue;
+    }
+
+    if (col.pages >= 0 && want) {
+      var p = String(data[i][col.pages] || '').trim();
+      if (p && p !== '全部' && p.indexOf(want) === -1) continue;
+    }
+
+    out.push(text);
+  }
+
+  return { success: true, data: out };
 }
 
 // ============================================================

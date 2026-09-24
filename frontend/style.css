@@ -1134,3 +1134,52 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .rank-badge.top-2 { background: #E2E8F0; color: #475569; }
 .rank-badge.top-3 { background: #FFEDD5; color: #EA580C; }
 .rank-badge.top-other { background: #F1F5F9; color: #64748B; }
+
+/* ============================================================
+   跑馬燈公告（內容維護於「系統公告」工作表；無內容時整條隱藏）
+   ============================================================ */
+.marquee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: #FFFBEB;
+  border-bottom: 1px solid #FDE68A;
+  color: #92400E;
+  overflow: hidden;
+}
+.marquee-icon {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+/* min-width:0 讓 flex 子項可以縮，否則長文字會把版面往右撐開 */
+.marquee-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.marquee-track {
+  display: inline-flex;
+  white-space: nowrap;
+  will-change: transform;
+  animation: marquee-scroll linear infinite;
+}
+.marquee-text {
+  padding-right: 3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-1 * var(--marquee-shift, 100%))); }
+}
+/* 滑過或以鍵盤聚焦時暫停，方便看清楚內容 */
+.marquee:hover .marquee-track,
+.marquee:focus-within .marquee-track { animation-play-state: paused; }
+
+/* 使用者若在系統設定關閉動畫效果，改為可自行左右捲動的靜態列 */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+  .marquee-viewport { overflow-x: auto; }
+}
