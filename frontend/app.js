@@ -121,6 +121,7 @@ const Marquee = {
     } catch (err) {
       console.warn('公告載入失敗，略過跑馬燈：', err.message);
       bar.classList.add('hidden');
+      document.body.classList.remove('has-marquee');
     }
   },
 
@@ -132,8 +133,11 @@ const Marquee = {
     const texts = (items || []).map(t => String(t).trim()).filter(Boolean);
     if (texts.length === 0) {          // 沒有公告 → 整條隱藏
       bar.classList.add('hidden');
+      document.body.classList.remove('has-marquee');
       return;
     }
+    // 供版面調整用：登入頁需要扣掉跑馬燈高度才不會多出捲軸
+    document.body.classList.add('has-marquee');
 
     const content = texts.join('　◆　');
     track.innerHTML = '';

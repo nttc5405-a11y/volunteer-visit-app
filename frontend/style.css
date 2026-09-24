@@ -1183,3 +1183,6 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   .marquee-track { animation: none; }
   .marquee-viewport { overflow-x: auto; }
 }
+
+/* 登入頁是滿版置中版面，有跑馬燈時高度要扣掉，避免整頁多出捲軸 */
+body.has-marquee .login-page { min-height: calc(100vh - 2.6rem); }

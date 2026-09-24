@@ -10,6 +10,14 @@
 </head>
 <body>
 
+<!-- 跑馬燈公告：內容來自「系統公告」工作表，沒有公告時整條不顯示 -->
+<div class="marquee hidden" id="marquee" role="status" aria-live="polite">
+  <span class="marquee-icon" aria-hidden="true">📢</span>
+  <div class="marquee-viewport">
+    <div class="marquee-track" id="marqueeTrack"></div>
+  </div>
+</div>
+
 <!-- ======================== 登入頁面 ======================== -->
 <main class="login-page">
 
@@ -125,6 +133,9 @@
         String(s.role || '').trim() === '大隊承辦人' ? 'dashboard.html' : 'form.html';
       return;
     }
+
+    // 公告不阻塞登入流程，載到才顯示
+    Marquee.load('登入頁');
   }
 
   // ─── 登入處理 ─────────────────────────────────────────────
