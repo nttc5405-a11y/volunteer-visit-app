@@ -316,7 +316,7 @@
                   <th>排名</th>
                   <th>志工姓名</th>
                   <th>所屬分隊</th>
-                  <th>訪視次數</th>
+                  <th>參與次數</th>
                 </tr>
               </thead>
               <tbody id="volunteerRankBody">
@@ -1128,18 +1128,44 @@
     }
 
     // ============================================================
+    // 統計每位志工的參與次數
+    //
+    // 一筆訪視紀錄裡，主填寫人與每一位協同志工各算一次參與，
+    // 所以同一筆會讓多個人各 +1（這是「參與次數」不是「訪視戶數」）。
+    // 回傳格式：{ "姓名||分隊": 次數 }
+    // ============================================================
+    function countVolunteerParticipation(records) {
+      const counts = {};
+
+      (records || []).forEach(r => {
+        const branch = r.branch || '無分隊';
+
+        // 用 Set 去重：同一筆紀錄裡若同一個人重複出現（例如主填寫人
+        // 又被勾選為協同志工），只計一次。
+        const names = new Set();
+        if (r.submitter) names.add(String(r.submitter).trim());
+        String(r.teamMembers || '')
+          .split(/[,，、;；]/)          // 容忍半形/全形逗號、頓號、分號
+          .forEach(n => {
+            const t = n.trim();
+            if (t) names.add(t);
+          });
+
+        names.forEach(name => {
+          if (!name) return;
+          const key = `${name}||${branch}`;
+          counts[key] = (counts[key] || 0) + 1;
+        });
+      });
+
+      return counts;
+    }
+
+    // ============================================================
     // 渲染「活躍志工榮譽榜」
     // ============================================================
     function renderVolunteerRank() {
-      const volCounts = {};
-      rawRecords.forEach(r => {
-        const name = r.submitter;
-        const branch = r.branch || '無分隊';
-        if (!name) return;
-
-        const key = `${name}||${branch}`;
-        volCounts[key] = (volCounts[key] || 0) + 1;
-      });
+      const volCounts = countVolunteerParticipation(rawRecords);
 
       // 排序志工
       const sorted = Object.entries(volCounts)
@@ -1218,6 +1244,7 @@
             <div><b>訪視日期:</b> ${r.visitDate || '無'}</div>
             <div><b>宣導類型:</b> ${r.visitType}</div>
             <div><b>主填人員:</b> ${r.submitter}</div>
+            ${r.teamMembers ? `<div><b>協同志工:</b> ${r.teamMembers}</div>` : ''}
             <div style="margin-top:4px; color:${markerColor}; font-weight:700;">
               ${high ? '⚠️ 高風險家戶' : (hits > 0 ? '注意：符合 ' + hits + ' 項風險' : '✓ 無風險項目')}
             </div>

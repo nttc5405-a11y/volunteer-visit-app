@@ -891,6 +891,8 @@ function getDashboardData(idCardLast3, phoneLast3, name) {
       visitDate:         visitDateVal,
       visitType:         row[colIdx['訪視類型'] || 3],
       submitter:         row[colIdx['主填寫人姓名'] || 4],
+      // 協同志工（以逗號分隔的字串），儀表板的志工統計要把他們一起計入
+      teamMembers:       text('協同志工'),
       branch:            branchName,
       clientName:        row[colIdx['案家姓名'] || 7],
       clientGender:      text('案家性別'),
