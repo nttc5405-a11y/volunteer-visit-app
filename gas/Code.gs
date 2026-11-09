@@ -712,6 +712,30 @@ function submitForm(record) {
 }
 
 // ============================================================
+// 判斷分隊表的「訪視紀錄」工作表第 1 列是不是標題列。
+//
+// 沿用舊系統的試算表常常第 1 列就是資料（例如 A1 直接是流水號的值），
+// 這種表交給 syncHeadersByName_ 會變成「整組欄位被接到既有資料右邊」，
+// 程式不會報錯、資料卻寫到離譜的位置（實際發生過）。
+// 完全空白的工作表回傳 true，因為標題列稍後就會寫進去。
+// ============================================================
+function isRecordHeaderRow_(sheet) {
+  if (sheet.getLastRow() === 0) return true;
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return true;
+
+  var row   = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var names = {};
+  for (var c = 0; c < row.length; c++) {
+    names[String(row[c]).trim()] = true;
+  }
+
+  // 這兩個欄位名稱主表一定有，且不可能剛好等於某一格的資料值
+  return names['流水號'] === true && names['所屬分隊'] === true;
+}
+
+// ============================================================
 // 分隊自動拆分：將紀錄同步至分隊專屬試算表
 // ============================================================
 function splitToBranch(record, id) {
@@ -740,6 +764,16 @@ function splitToBranch(record, id) {
       if (!subSheet) {
         subSheet = subSS.insertSheet('訪視紀錄');
         subSheet.appendRow(mainHeaders);
+      }
+
+      // 防呆：工作表已存在、但第 1 列不是標題列（多半是沿用舊系統的試算表）。
+      // 這時若硬同步，欄位會被接到既有資料的右邊，程式不會報錯但資料寫錯位置。
+      // 寧可不同步並留下明確紀錄，也不要默默弄髒分隊表。
+      if (!isRecordHeaderRow_(subSheet)) {
+        Logger.log('【分隊同步已跳過】分隊「' + record.branch + '」的「訪視紀錄」工作表第 1 列不是標題列，'
+                 + '可能是沿用舊格式的試算表。請改用系統建立的分隊試算表，'
+                 + '或在第 1 列補上與主表相同的標題列。（試算表 ID: ' + subSheetId + '）');
+        return;
       }
 
       // 主表新增題目欄位後，分隊表標題列一併補齊（依欄位名稱比對，

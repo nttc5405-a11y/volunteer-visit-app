@@ -135,6 +135,9 @@ function onOpen() {
     .addItem('📋 填入預設連動規則', 'fillDefaultSuggestionRules')
     .addItem('📢 建立系統公告表（跑馬燈）', 'createAnnouncementSheet')
     .addSeparator()
+    .addItem('🔍 檢查分隊試算表（順便補標題列）', 'checkBranchSheets')
+    .addItem('🏢 建立分隊專屬試算表（只處理未設定的）', 'createBranchSheets')
+    .addSeparator()
     .addItem('🗑️ 刪除指定紀錄（依流水號）', 'deleteRecordsByIds')
     .addToUi();
 }
@@ -603,6 +606,108 @@ function _styleHeader(sheet, colCount) {
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
   sheet.setRowHeight(1, 36);
+}
+
+// ============================================================
+// 檢查（並順手修復）所有分隊專屬試算表
+//
+// 逐一檢查「分隊對照表」上的每個分隊：
+//   ID 有沒有填 → 腳本打不打得開 → 有沒有「訪視紀錄」工作表 →
+//   第 1 列是不是標題列 → 欄位齊不齊（缺的補上）
+//
+// 只會「新增」缺少的工作表與標題欄位，不會刪除或覆蓋任何既有資料。
+// 第 1 列不是標題列的舊格式試算表一律不碰，只回報。
+// ============================================================
+function checkBranchSheets() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var mainSheet = ss.getSheetByName('訪視紀錄表');
+  if (!mainSheet) {
+    ui.alert('❌ 找不到「訪視紀錄表」工作表。');
+    return;
+  }
+
+  var branchList = readBranchTable_();
+  if (branchList === null) {
+    ui.alert('❌ 找不到「分隊對照表」工作表。');
+    return;
+  }
+  if (!branchList.length) {
+    ui.alert('「分隊對照表」目前沒有任何分隊資料。');
+    return;
+  }
+
+  var mainHeaders = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
+
+  var lines = [];
+  var okCount = 0, fixedCount = 0, problemCount = 0;
+
+  for (var i = 0; i < branchList.length; i++) {
+    var b = branchList[i];
+
+    if (!b.sheetId) {
+      lines.push('⚠️ ' + b.name + '：未設定試算表 ID');
+      problemCount++;
+      continue;
+    }
+
+    try {
+      var subSS    = SpreadsheetApp.openById(b.sheetId);
+      var subSheet = subSS.getSheetByName('訪視紀錄');
+
+      // 沒有「訪視紀錄」工作表 → 建一張並寫入標題列
+      if (!subSheet) {
+        subSheet = subSS.insertSheet('訪視紀錄');
+        subSheet.appendRow(mainHeaders);
+        subSheet.setFrozenRows(1);
+        lines.push('🔧 ' + b.name + '：已新建「訪視紀錄」工作表並寫入標題列');
+        fixedCount++;
+        continue;
+      }
+
+      // 第 1 列不是標題列 → 舊格式，硬同步會把欄位接到資料右邊，一律不動
+      if (!isRecordHeaderRow_(subSheet)) {
+        lines.push('❌ ' + b.name + '：第 1 列不是標題列（舊格式），未做任何修改');
+        problemCount++;
+        continue;
+      }
+
+      var before  = subSheet.getLastColumn();
+      var headers = syncHeadersByName_(subSheet, mainHeaders);
+      var added   = headers.length - before;
+      var rows    = Math.max(subSheet.getLastRow() - 1, 0);
+
+      if (added > 0) {
+        lines.push('🔧 ' + b.name + '：已補上 ' + added + ' 個欄位（目前 ' + rows + ' 筆紀錄）');
+        fixedCount++;
+      } else {
+        lines.push('✅ ' + b.name + '：正常（目前 ' + rows + ' 筆紀錄）');
+        okCount++;
+      }
+
+    } catch (err) {
+      lines.push('❌ ' + b.name + '：打不開試算表（ID 錯誤或本帳號沒有權限）');
+      Logger.log('【分隊試算表檢查失敗】' + b.name + ' → ' + err.toString());
+      problemCount++;
+    }
+  }
+
+  var summary = '分隊試算表檢查結果（共 ' + branchList.length + ' 個分隊）\n\n'
+              + '✅ 正常 ' + okCount + ' 個　🔧 已修復 ' + fixedCount + ' 個　❌ 需處理 ' + problemCount + ' 個\n\n'
+              + lines.join('\n');
+
+  if (problemCount > 0) {
+    summary += '\n\n【需處理的項目怎麼修】\n'
+             + '・未設定試算表 ID：在「分隊對照表」填入 ID；或把該欄留空後執行選單的「建立分隊專屬試算表」。\n'
+             + '・打不開試算表：ID 貼錯（只要網址中間那一串，不是整段網址），'
+             + '或那張試算表沒有分享「編輯者」權限給本帳號。\n'
+             + '・第 1 列不是標題列：那是沿用舊系統的試算表，同步會把欄位接到資料右邊。'
+             + '建議把「分隊對照表」該列的 ID 清空後執行「建立分隊專屬試算表」改用新表，舊表留著當歷史資料。';
+  }
+
+  Logger.log(summary);
+  ui.alert(summary);
 }
 
 // ============================================================
