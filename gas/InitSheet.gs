@@ -123,14 +123,19 @@ function _noteSuggestionColumn(sheet, colIndex) {
 // 開啟試算表時建立自訂選單
 // ============================================================
 // 選單只放「安全、可重複執行」的功能。
-// initializeSheets / resetAllSheets 會清空資料，刻意不放進選單，
+// initializeSheets / resetAllSheets 會無條件清空資料，刻意不放進選單，
 // 必須到 Apps Script 編輯器選擇函式才能執行，以免誤點。
+//
+// deleteRecordsByIds 雖然會刪資料，但要先手動輸入流水號、再按確認才會動作，
+// 誤點只會跳出可取消的對話框，因此放進選單（分隔線下方）。
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('志工訪視系統')
     .addItem('🔄 同步題庫欄位', 'syncQuestionColumns')
     .addItem('📋 填入預設連動規則', 'fillDefaultSuggestionRules')
     .addItem('📢 建立系統公告表（跑馬燈）', 'createAnnouncementSheet')
+    .addSeparator()
+    .addItem('🗑️ 刪除指定紀錄（依流水號）', 'deleteRecordsByIds')
     .addToUi();
 }
 
@@ -601,7 +606,283 @@ function _styleHeader(sheet, colCount) {
 }
 
 // ============================================================
-// 重置所有資料（謹慎使用：會清空全部內容）
+// 刪除指定流水號的訪視紀錄（清除測試資料用）
+//
+// 會一併處理三處：
+//   1. 主試算表「訪視紀錄表」
+//   2. 各分隊專屬試算表的「訪視紀錄」（依分隊對照表逐一檢查）
+//   3. Drive 資料夾「志工訪視系統_受訪人簽名」裡對應的簽名圖（詢問後才刪）
+//
+// 不會動到人員帳號管理、分隊對照表、訪視題庫、系統公告。
+// 刪除後剩餘紀錄的流水號保持原樣，不重新編號（新紀錄取最大號 +1）。
+// ============================================================
+function deleteRecordsByIds() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var sheet = ss.getSheetByName('訪視紀錄表');
+  if (!sheet) {
+    ui.alert('❌ 找不到「訪視紀錄表」工作表。');
+    return;
+  }
+
+  // ---------- 1. 問要刪哪幾筆 ----------
+  var resp = ui.prompt(
+    '🗑️ 刪除指定紀錄',
+    '請輸入要刪除的流水號，用逗號分隔，連號可用減號：\n' +
+    '　例如： 1,2,5    或    1-8    或    1-3,7\n\n' +
+    '⚠️ 刪除無法復原。請先用「檔案 → 建立副本」備份主試算表與各分隊試算表。',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+
+  var ids = _parseIdList(resp.getResponseText());
+  if (!ids.length) {
+    ui.alert('沒有讀到有效的流水號，已取消，資料未更動。');
+    return;
+  }
+  if (ids.length > 500) {
+    ui.alert('一次最多刪除 500 筆，請分批執行。資料未更動。');
+    return;
+  }
+
+  // ---------- 2. 找出對應的列，先給使用者確認 ----------
+  var data    = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var colIdx  = {};
+  for (var c = 0; c < headers.length; c++) {
+    colIdx[String(headers[c]).trim()] = c;
+  }
+  var idCol = colIdx.hasOwnProperty('流水號') ? colIdx['流水號'] : 0;
+
+  var targets = [];
+  for (var i = 1; i < data.length; i++) {
+    var rowId = parseInt(data[i][idCol], 10);
+    if (isNaN(rowId) || ids.indexOf(rowId) === -1) continue;
+
+    targets.push({
+      row:       i + 1, // 試算表列號（含標題列）
+      id:        rowId,
+      visitDate: _fmtDateCell(data[i][colIdx['訪視日期']]),
+      client:    String(data[i][colIdx['案家姓名']] || ''),
+      branch:    String(data[i][colIdx['所屬分隊']] || ''),
+      signature: String(data[i][colIdx['受訪者簽名']] || '')
+    });
+  }
+
+  if (!targets.length) {
+    ui.alert('主試算表裡找不到這些流水號：' + ids.join(', ') + '\n\n資料未更動。');
+    return;
+  }
+
+  var foundIds = targets.map(function(t) { return t.id; });
+  var missing  = ids.filter(function(n) { return foundIds.indexOf(n) === -1; });
+
+  var preview = targets.slice(0, 20).map(function(t) {
+    return '　#' + t.id + '　' + t.visitDate + '　' + (t.client || '(未填案家)') + '　' + t.branch;
+  }).join('\n');
+  if (targets.length > 20) preview += '\n　…另外還有 ' + (targets.length - 20) + ' 筆';
+
+  var msg = '即將刪除以下 ' + targets.length + ' 筆紀錄：\n\n' + preview + '\n\n';
+  if (missing.length) {
+    msg += '（流水號 ' + missing.join(', ') + ' 找不到，會略過）\n\n';
+  }
+  msg += '同時會刪掉分隊專屬試算表裡對應的紀錄。\n此操作無法復原，確定要繼續嗎？';
+
+  if (ui.alert('⚠️ 最後確認', msg, ui.ButtonSet.YES_NO) !== ui.Button.YES) {
+    ui.alert('已取消，資料未更動。');
+    return;
+  }
+
+  // ---------- 3. 刪主試算表（由下往上、整段刪，列號才不會跑掉） ----------
+  var blocks = _rowDeleteBlocks(targets.map(function(t) { return t.row; }));
+  for (var k = 0; k < blocks.length; k++) {
+    sheet.deleteRows(blocks[k].start, blocks[k].count);
+  }
+  Logger.log('主試算表已刪除 ' + targets.length + ' 筆：' + foundIds.join(', '));
+
+  // ---------- 4. 刪分隊專屬試算表 ----------
+  var branchReport = _deleteFromBranchSheets(foundIds);
+
+  // ---------- 5. 問要不要一起刪簽名圖 ----------
+  var sigUrls = targets
+    .map(function(t) { return t.signature; })
+    .filter(function(u) { return u && u.indexOf('http') === 0; });
+
+  var sigReport = '簽名圖：這些紀錄沒有簽名圖，無須處理';
+  if (sigUrls.length) {
+    var doSig = ui.alert(
+      '要一併刪除簽名圖嗎？',
+      '這些紀錄有 ' + sigUrls.length + ' 張受訪人簽名圖存在 Drive 的\n' +
+      '「志工訪視系統_受訪人簽名」資料夾裡。\n\n' +
+      '按「是」會把它們移到 Drive 垃圾桶（30 天內還可還原）。\n' +
+      '按「否」則保留圖檔，只是紀錄已經刪掉。',
+      ui.ButtonSet.YES_NO
+    );
+    if (doSig === ui.Button.YES) {
+      var r = _trashSignatureFiles(sigUrls);
+      sigReport = '簽名圖：已移到垃圾桶 ' + r.ok + ' 張'
+                + (r.failed ? '，失敗 ' + r.failed + ' 張（請手動刪除）' : '');
+    } else {
+      sigReport = '簽名圖：保留，未刪除（共 ' + sigUrls.length + ' 張）';
+    }
+  }
+
+  // ---------- 6. 總結 ----------
+  var summary = '✅ 刪除完成\n\n'
+              + '主試算表：已刪除 ' + targets.length + ' 筆（流水號 ' + foundIds.join(', ') + '）\n'
+              + branchReport + '\n'
+              + sigReport + '\n\n'
+              + '下一筆新紀錄的流水號會是 ' + nextRecordId_(sheet) + '。';
+  Logger.log(summary);
+  ui.alert(summary);
+}
+
+// 解析「1,2,5-8」這種輸入，回傳不重複、排序好的數字陣列
+function _parseIdList(text) {
+  var out = [];
+  String(text || '')
+    .replace(/[，、]/g, ',')   // 容忍全形逗號與頓號
+    .replace(/[～—–]/g, '-')   // 容忍全形波浪號與各種破折號
+    .split(',')
+    .forEach(function(part) {
+      part = part.trim();
+      if (!part) return;
+
+      var range = part.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (range) {
+        var from = parseInt(range[1], 10);
+        var to   = parseInt(range[2], 10);
+        if (from > to) { var tmp = from; from = to; to = tmp; }
+        if (to - from > 500) return; // 範圍過大視為輸入錯誤，略過
+        for (var n = from; n <= to; n++) {
+          if (out.indexOf(n) === -1) out.push(n);
+        }
+        return;
+      }
+
+      var single = parseInt(part, 10);
+      if (!isNaN(single) && single > 0 && out.indexOf(single) === -1) out.push(single);
+    });
+
+  return out.sort(function(a, b) { return a - b; });
+}
+
+// 把要刪除的列號整理成「由下往上」的連續區塊，例如 [10,9,8,5] → [{8,3},{5,1}]。
+// 一次刪一整段可大幅減少 deleteRows 呼叫次數，避免筆數多時撞到 GAS 執行時間上限。
+function _rowDeleteBlocks(rows) {
+  var sorted = rows
+    .slice()
+    .sort(function(a, b) { return b - a; })
+    .filter(function(v, i, arr) { return i === 0 || v !== arr[i - 1]; }); // 去重，重複列號會算錯區塊
+
+  var blocks = [];
+  var i = 0;
+  while (i < sorted.length) {
+    var endRow = sorted[i]; // 這一段最下面的列
+    var count  = 1;
+    while (i + count < sorted.length && sorted[i + count] === endRow - count) count++;
+    blocks.push({ start: endRow - count + 1, count: count });
+    i += count;
+  }
+  return blocks;
+}
+
+// 把日期欄位印成 yyyy-MM-dd，不是日期就原樣輸出
+function _fmtDateCell(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return Utilities.formatDate(
+      value, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(value);
+}
+
+// 逐一掃過分隊對照表上所有分隊試算表，刪掉流水號相符的列。
+// 刻意不只看紀錄上的「所屬分隊」，以免早期同步到別的分隊的資料被漏掉。
+function _deleteFromBranchSheets(ids) {
+  var branchList = readBranchTable_();
+  if (branchList === null) return '分隊試算表：找不到分隊對照表，未處理';
+  if (!branchList.length) return '分隊試算表：分隊對照表沒有資料，未處理';
+
+  var lines = [];
+  var total = 0;
+
+  for (var i = 0; i < branchList.length; i++) {
+    var branch = branchList[i];
+    if (!branch.sheetId) {
+      lines.push('　' + branch.name + '：未設定試算表 ID，略過');
+      continue;
+    }
+
+    try {
+      var subSheet = SpreadsheetApp.openById(branch.sheetId).getSheetByName('訪視紀錄');
+      if (!subSheet) {
+        lines.push('　' + branch.name + '：沒有「訪視紀錄」工作表，略過');
+        continue;
+      }
+
+      var subData = subSheet.getDataRange().getValues();
+      if (subData.length <= 1) {
+        lines.push('　' + branch.name + '：0 筆');
+        continue;
+      }
+
+      var subIdCol = 0;
+      for (var c = 0; c < subData[0].length; c++) {
+        if (String(subData[0][c]).trim() === '流水號') { subIdCol = c; break; }
+      }
+
+      var rows = [];
+      for (var r = 1; r < subData.length; r++) {
+        var rid = parseInt(subData[r][subIdCol], 10);
+        if (!isNaN(rid) && ids.indexOf(rid) !== -1) rows.push(r + 1);
+      }
+
+      var subBlocks = _rowDeleteBlocks(rows); // 由下往上、整段刪
+      for (var d = 0; d < subBlocks.length; d++) {
+        subSheet.deleteRows(subBlocks[d].start, subBlocks[d].count);
+      }
+
+      total += rows.length;
+      lines.push('　' + branch.name + '：' + rows.length + ' 筆');
+    } catch (err) {
+      lines.push('　' + branch.name + '：開啟失敗，未處理（' + err.toString() + '）');
+      Logger.log('【分隊刪除失敗】' + branch.name + ' → ' + err.toString());
+    }
+  }
+
+  return '分隊試算表：共刪除 ' + total + ' 筆\n' + lines.join('\n');
+}
+
+// 依簽名欄的 Drive 網址把圖檔移到垃圾桶
+function _trashSignatureFiles(urls) {
+  var ok = 0, failed = 0;
+
+  for (var i = 0; i < urls.length; i++) {
+    var matched = String(urls[i]).match(/[-\w]{25,}/); // Drive 檔案 ID
+    if (!matched) { failed++; continue; }
+
+    try {
+      DriveApp.getFileById(matched[0]).setTrashed(true);
+      ok++;
+    } catch (err) {
+      failed++;
+      Logger.log('【簽名圖刪除失敗】' + urls[i] + ' → ' + err.toString());
+    }
+  }
+
+  return { ok: ok, failed: failed };
+}
+
+// ============================================================
+// 重置所有資料
+//
+// ⚠️ 這不是「清除測試紀錄」的工具！它會重建每一張工作表：
+//    人員帳號管理 → 覆蓋成 10 筆範例人員（真實名冊會不見）
+//    分隊對照表   → 覆蓋成 3 筆範例（各分隊試算表 ID 會不見，同步會斷）
+//    訪視題庫     → 還原成預設題目
+// 只要刪除訪視紀錄，請改用選單的「🗑️ 刪除指定紀錄」。
 // ============================================================
 function resetAllSheets() {
   var ui = SpreadsheetApp.getUi();

@@ -567,6 +567,41 @@ function verifyLogin(idCardLast3, phoneLast3, name) {
 }
 
 // ============================================================
+// 找出「流水號」在第幾欄（找不到標題時沿用第一欄，相容舊試算表）
+// ============================================================
+function recordIdColumn_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return 1;
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var c = 0; c < headers.length; c++) {
+    if (String(headers[c]).trim() === '流水號') return c + 1;
+  }
+  return 1;
+}
+
+// ============================================================
+// 下一筆紀錄的流水號 = 現有最大號 + 1
+//
+// 這樣刪除中間幾筆測試紀錄後，新紀錄仍會接在最大號之後，
+// 既有紀錄的號碼不必重新編號（簽名圖檔名也含流水號，重編號會對不上）。
+// ============================================================
+function nextRecordId_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1; // 只有標題列，表示還沒有任何紀錄
+
+  var col    = recordIdColumn_(sheet);
+  var values = sheet.getRange(2, col, lastRow - 1, 1).getValues();
+
+  var max = 0;
+  for (var i = 0; i < values.length; i++) {
+    var n = parseInt(values[i][0], 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return max + 1;
+}
+
+// ============================================================
 // 提交訪視表單
 // ============================================================
 function submitForm(record) {
@@ -576,8 +611,10 @@ function submitForm(record) {
   var sheet = ss.getSheetByName('訪視紀錄表');
   if (!sheet) return { success: false, error: '找不到「訪視紀錄表」工作表' };
 
-  // 生成流水號（目前列數 = 已有筆數，不含 header）
-  var id = sheet.getLastRow(); // header 是第1列，資料從第2列起，所以 lastRow 即為新 ID
+  // 生成流水號：取「現有最大號 + 1」。
+  // 不可改回用列數推算（例如 getLastRow()）——刪掉舊紀錄後，剩下的紀錄會往上遞補，
+  // 列數算出來的號碼會撞到既有紀錄；撞號時分隊同步會比對到錯誤的那一列且不會報錯。
+  var id = nextRecordId_(sheet);
 
   // 儲存受訪人手寫簽名圖檔至 Google Drive
   var signatureUrl = '';
